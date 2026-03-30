@@ -1,3 +1,4 @@
+// src/app/api/auth/login/route.ts
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/db/prisma";
@@ -43,11 +44,6 @@ export async function POST(req: Request) {
       role: user.role,
     });
 
-    await prisma.user.update({
-      where: { id: user.id },
-      data: { lastLogin: new Date() },
-    });
-
     const response = NextResponse.json({
       user: {
         id: user.id,
@@ -66,7 +62,8 @@ export async function POST(req: Request) {
     });
 
     return response;
-  } catch {
+  } catch (error) {
+    console.error("LOGIN_ERROR", error);
     return NextResponse.json(
       { message: "Giriş sırasında hata oluştu." },
       { status: 500 }
