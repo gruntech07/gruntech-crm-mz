@@ -1,0 +1,239 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         UserRole
+  isActive     Boolean   @default(true)
+  teamId       String?
+  lastLogin    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  createdCustomers  Customer[] @relation("CustomerCreatedBy")
+  assignedCustomers Customer[] @relation("CustomerAssignedTo")
+  teamLeadCustomers Customer[] @relation("CustomerTeamLead")
+
+  customerNotes  CustomerNote[]   @relation("CustomerNoteAuthor")
+  activities     Activity[]       @relation("ActivityUser")
+  customerAccess CustomerAccess[] @relation("CustomerAccessUser")
+}
+
+model Customer {
+  id      String  @id @default(cuid())
+  name    String
+  company String?
+  phone   String
+  email   String?
+  address String?
+
+  probability       SalesProbability @default(MEDIUM)
+  estimatedValue    Decimal?         @db.Decimal(12, 2)
+  expectedCloseDate DateTime?
+
+  assignedToId String
+  teamLeadId   String?
+  createdById  String
+
+  status           CustomerStatus @default(NEW)
+  source           CustomerSource @default(OTHER)
+  tags             String[]
+  notesText        String         @default("")
+  lastContact      DateTime?
+  lastContactNotes String         @default("")
+
+  recordNo            String?
+  recordDate          DateTime?
+  city                String?
+  district            String?
+  facilityName        String?
+  sector              String?
+  contactName         String?
+  contactTitle        String?
+  hasWhatsapp         Boolean?
+  locationNote        String?
+  firstContactChannel String?
+  referralSource      String?
+  responsiblePerson   String?
+
+  facilityType          String?
+  currentSituation      String?
+  needAnalysis          String?
+  meetingSummary        String?
+  roofSuitable          String?
+  roofAreaM2            Float?
+  transformerPowerKva   Float?
+  contractPowerKw       Float?
+  monthlyConsumptionKwh Float?
+  monthlyBillTl         Float?
+
+  wantsBackupPower         Boolean?
+  batteryRequested         Boolean?
+  outageLoadsDescription   String?
+  hasCriticalLoads         Boolean?
+  criticalLoadsDescription String?
+  hybridInverterPreference String?
+  wantsAlternativeProposal Boolean?
+  alternativeProposalNotes String?
+
+  requestedWorkType     String?
+  proposalGiven         Boolean?
+  proposalDate          DateTime?
+  proposalNo            String?
+  proposalAmountVatExcl Decimal?  @db.Decimal(12, 2)
+  proposalAmountVatIncl Decimal?  @db.Decimal(12, 2)
+  estimatedCost         Decimal?  @db.Decimal(12, 2)
+  estimatedProfit       Decimal?  @db.Decimal(12, 2)
+
+  stage           String?
+  lastMeetingDate DateTime?
+  result          String?
+  lostReason      String?
+  competitor      String?
+
+  completedWork       String?
+  contractValue       Decimal?  @db.Decimal(12, 2)
+  actualCost          Decimal?  @db.Decimal(12, 2)
+  actualProfit        Decimal?  @db.Decimal(12, 2)
+  paymentStatus       String?
+  receivedPayment     Decimal?  @db.Decimal(12, 2)
+  remainingReceivable Decimal?  @db.Decimal(12, 2)
+  jobStartDate        DateTime?
+  jobEndDate          DateTime?
+  invoiceIssued       Boolean?
+  invoiceNo           String?
+  maintenanceProposal String?
+
+  nextFollowUpDate DateTime?
+  priority         String?
+  statusNote       String?
+
+  siteMediaNotes String?
+  fileLink       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  assignedTo User  @relation("CustomerAssignedTo", fields: [assignedToId], references: [id], onDelete: Restrict)
+  teamLead   User? @relation("CustomerTeamLead", fields: [teamLeadId], references: [id], onDelete: SetNull)
+  createdBy  User  @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: Restrict)
+
+  notes      CustomerNote[]
+  activities Activity[]
+  accessList CustomerAccess[]
+
+  @@index([assignedToId])
+  @@index([teamLeadId])
+  @@index([createdById])
+  @@index([status])
+  @@index([probability])
+}
+
+model CustomerNote {
+  id         String   @id @default(cuid())
+  customerId String
+  authorId   String
+  content    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  author   User     @relation("CustomerNoteAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([authorId])
+}
+
+model Activity {
+  id          String       @id @default(cuid())
+  customerId  String
+  userId      String
+  type        ActivityType
+  description String
+  dueDate     DateTime?
+  isCompleted Boolean      @default(false)
+  createdAt   DateTime     @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User     @relation("ActivityUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@index([userId])
+}
+
+model CustomerAccess {
+  id         String     @id @default(cuid())
+  customerId String
+  userId     String
+  accessType AccessType @default(VIEW)
+  createdAt  DateTime   @default(now())
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  user     User     @relation("CustomerAccessUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([customerId, userId])
+  @@index([customerId])
+  @@index([userId])
+}
+
+enum UserRole {
+  ADMIN
+  SALES_MANAGER
+  PROJECT_MANAGER
+  SALES_REP
+}
+
+enum CustomerStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  PROPOSAL
+  NEGOTIATION
+  WON
+  LOST
+}
+
+enum CustomerSource {
+  WEBSITE
+  REFERRAL
+  PHONE
+  EMAIL
+  WALK_IN
+  SOCIAL_MEDIA
+  OTHER
+}
+
+enum SalesProbability {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum ActivityType {
+  CREATED
+  UPDATED
+  NOTE_ADDED
+  STATUS_CHANGED
+  ASSIGNED
+  CONTACTED
+  NOTE
+  CALL
+  MEETING
+  TASK
+}
+
+enum AccessType {
+  VIEW
+  EDIT
+  FULL
+}
