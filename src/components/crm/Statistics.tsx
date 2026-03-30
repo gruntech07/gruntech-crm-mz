@@ -14,14 +14,14 @@ interface StatisticsProps {
   byStatus: {
     new: number;
     contacted: number;
-    negotiating: number;
+    negotiation: number;
     closed_won: number;
     closed_lost: number;
   };
 }
 
 export function Statistics({ total, byProbability, byStatus }: StatisticsProps) {
-  const activeCustomers = byStatus.new + byStatus.contacted + byStatus.negotiating;
+  const activeCustomers = byStatus.new + byStatus.contacted + byStatus.negotiation;
   const wonCustomers = byStatus.closed_won;
   const conversionRate = total > 0 ? Math.round((wonCustomers / total) * 100) : 0;
 
@@ -122,7 +122,7 @@ export function Statistics({ total, byProbability, byStatus }: StatisticsProps) 
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
             <StatusBox label={statusLabels.new} count={byStatus.new} color="bg-gray-100" />
             <StatusBox label={statusLabels.contacted} count={byStatus.contacted} color="bg-blue-100" />
-            <StatusBox label={statusLabels.negotiating} count={byStatus.negotiating} color="bg-yellow-100" />
+            <StatusBox label={statusLabels.negotiation} count={byStatus.negotiation} color="bg-yellow-100" />
             <StatusBox label={statusLabels.closed_won} count={byStatus.closed_won} color="bg-green-100" />
             <StatusBox label={statusLabels.closed_lost} count={byStatus.closed_lost} color="bg-red-100" />
           </div>

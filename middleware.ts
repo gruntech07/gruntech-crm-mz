@@ -1,29 +1,34 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const AUTH_COOKIE_NAME = "gruntechcrm_token";
-
 export function middleware(request: NextRequest) {
+  const token = request.cookies.get("token")?.value;
   const { pathname } = request.nextUrl;
-  const token = request.cookies.get(AUTH_COOKIE_NAME)?.value;
 
-  const isAuthPage = pathname.startsWith("/login");
-  const isProtectedPage =
-    pathname.startsWith("/dashboard") ||
-    pathname.startsWith("/customers") ||
-    pathname.startsWith("/users");
-
-  if (isProtectedPage && !token) {
-    return NextResponse.redirect(new URL("/login", request.url));
+  // login ve api auth serbest
+  if (
+    pathname.startsWith("/login") ||
+    pathname.startsWith("/api/auth")
+  ) {
+    return NextResponse.next();
   }
 
-  if (isAuthPage && token) {
-    return NextResponse.redirect(new URL("/dashboard", request.url));
+  // static dosyalar
+  if (
+    pathname.startsWith("/_next") ||
+    pathname.startsWith("/favicon.ico")
+  ) {
+    return NextResponse.next();
+  }
+
+  // TOKEN YOKSA → LOGIN
+  if (!token) {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
 
   return NextResponse.next();
 }
 
 export const config = {
-  matcher: ["/login", "/dashboard/:path*", "/customers/:path*", "/users/:path*"],
+  matcher: ["/((?!_next|favicon.ico).*)"],
 };

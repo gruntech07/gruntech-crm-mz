@@ -61,15 +61,17 @@ type SessionUser = {
   email: string;
   name: string;
   role: SessionRole;
+  createdAt?: string;
 };
 
-type LegacyUser = {
+export type LegacyUser = {
   id: string;
   name: string;
   email: string;
   role: LegacyRole;
-  teamId?: string;
   isActive: boolean;
+  teamId?: string;
+  createdAt: Date;
 };
 
 function mapRole(role: SessionRole): LegacyRole {
@@ -92,6 +94,8 @@ function mapSessionUserToLegacy(user: SessionUser): LegacyUser {
     email: user.email,
     role: mapRole(user.role),
     isActive: true,
+    teamId: undefined,
+    createdAt: user.createdAt ? new Date(user.createdAt) : new Date(),
   };
 }
 
@@ -166,45 +170,49 @@ export function CRMMain() {
   }, []);
 
   const auth = useMemo(() => {
-    const user = legacyUser;
+  const user = legacyUser;
 
-    const users: AppUser[] = user?.role === "admin"
+  const currentUser: AppUser | null = user
+    ? {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        teamId: user.teamId,
+        isActive: user.isActive,
+        createdAt: user.createdAt.toISOString(),
+      }
+    : null;
+
+  const users: AppUser[] =
+    user?.role === "admin"
       ? managedUsers
-      : user
-      ? [
-          {
-            id: user.id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-            teamId: user.teamId,
-            isActive: user.isActive,
-            createdAt: new Date().toISOString(),
-          },
-        ]
+      : currentUser
+      ? [currentUser]
       : [];
 
-    return {
-      user,
-      users,
-      isAuthenticated: !!user,
-      canManageUsers: user?.role === "admin",
-      login: async () => true,
-      logout: async () => {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        });
-        window.location.href = "/login";
-      },
-      addUser,
-      updateUser,
-      deactivateUser,
-      getUserById: (id: string) => users.find((u) => u.id === id),
-      getTeamLeads: () =>
-        users.filter((u) => u.role === "team_lead" || u.role === "admin"),
-    };
-  }, [legacyUser, managedUsers, addUser, updateUser, deactivateUser]);
+  return {
+    user,
+    currentUser,
+    users,
+    isAuthenticated: !!user,
+    canManageUsers: user?.role === "admin",
+    login: async () => true,
+    logout: async () => {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      window.location.href = "/login";
+    },
+    addUser,
+    updateUser,
+    deactivateUser,
+    getUserById: (id: string) => users.find((u) => u.id === id),
+    getTeamLeads: () =>
+      users.filter((u) => u.role === "team_lead" || u.role === "admin"),
+  };
+}, [legacyUser, managedUsers, addUser, updateUser, deactivateUser]);
 
   const getUserName = useCallback(
     (id: string) => {
@@ -597,7 +605,7 @@ export function CRMMain() {
           setCustomerToEdit(null);
         }}
         onSubmit={handleFormSubmit}
-        currentUser={auth.user!}
+        currentUser={auth.currentUser!}
         users={auth.users}
         teamLeads={auth.getTeamLeads()}
         allTags={allTags}
