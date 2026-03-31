@@ -3,11 +3,16 @@
 import { useEffect, useMemo, useCallback, useState } from "react";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useUsers } from "@/hooks/useUsers";
+import { usePlannedVisits } from "@/hooks/usePlannedVisits";
+import { useCustomerNotes } from "@/hooks/useCustomerNotes";
 import { Dashboard } from "@/components/crm/Dashboard";
 import { PipelineView } from "@/components/crm/PipelineView";
 import { CustomerForm } from "@/components/crm/CustomerForm";
 import { CustomerDetail } from "@/components/crm/CustomerDetail";
 import { CustomerTechnicalForm } from "@/components/crm/CustomerTechnicalForm";
+import { PlannedVisitsView } from "@/components/crm/PlannedVisitsView";
+import { PlannedVisitForm } from "@/components/crm/PlannedVisitForm";
+import { CustomerCard } from "@/components/crm/CustomerCard";
 import type { CustomerTechnicalFormData } from "@/components/crm/CustomerTechnicalForm";
 import { UserManagement } from "@/components/crm/UserManagement";
 import { Button } from "@/components/ui/button";
@@ -38,11 +43,12 @@ import {
   Settings,
   Trash2,
   AlertTriangle,
-  Building2,
+  CalendarIcon,
   Tag,
   CircleDollarSign,
   LayoutGrid,
   Filter,
+  Rows3,
 } from "lucide-react";
 import type {
   Customer,
@@ -51,6 +57,7 @@ import type {
   ActivityType,
   User as AppUser,
 } from "@/types";
+import type { PlannedVisit, PlannedVisitFormData } from "@/types/plannedVisit";
 import { statusLabels, probabilityLabels, roleLabels } from "@/types";
 
 type SessionRole = "ADMIN" | "SALES_MANAGER" | "PROJECT_MANAGER" | "SALES_REP";
@@ -126,15 +133,33 @@ export function CRMMain() {
     deactivateUser,
   } = useUsers(legacyUser?.role === "admin");
 
+  const {
+    plannedVisits,
+    isLoading: plannedVisitsLoading,
+    error: plannedVisitsError,
+    loadPlannedVisits,
+    createPlannedVisit,
+    updatePlannedVisit,
+    deletePlannedVisit,
+    convertPlannedVisitToCustomer,
+  } = usePlannedVisits();
+
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
   const [probabilityFilter, setProbabilityFilter] = useState<
     "all" | "high" | "medium" | "low" | "none"
   >("all");
   const [tagFilter, setTagFilter] = useState<string>("all");
+  const [customerViewMode, setCustomerViewMode] = useState<"card" | "list">("card");
+
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [isTechnicalFormOpen, setIsTechnicalFormOpen] = useState(false);
   const [isUserManagementOpen, setIsUserManagementOpen] = useState(false);
+
+  const [isPlannedVisitFormOpen, setIsPlannedVisitFormOpen] = useState(false);
+  const [plannedVisitToEdit, setPlannedVisitToEdit] = useState<PlannedVisit | null>(null);
+  const [isPlannedVisitSubmitting, setIsPlannedVisitSubmitting] = useState(false);
+
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
@@ -166,32 +191,31 @@ export function CRMMain() {
   }, []);
 
   const auth = useMemo(() => {
-  const user: AppUser | null = legacyUser
-    ? {
-        id: legacyUser.id,
-        name: legacyUser.name,
-        email: legacyUser.email,
-        role: legacyUser.role,
-        teamId: legacyUser.teamId,
-        isActive: legacyUser.isActive,
-        createdAt: new Date().toISOString(),
-      }
-    : null;
+    const user: AppUser | null = legacyUser
+      ? {
+          id: legacyUser.id,
+          name: legacyUser.name,
+          email: legacyUser.email,
+          role: legacyUser.role,
+          teamId: legacyUser.teamId,
+          isActive: legacyUser.isActive,
+          createdAt: new Date().toISOString(),
+        }
+      : null;
 
-  const users: AppUser[] =
-    legacyUser?.role === "admin"
-      ? managedUsers
-      : user
-      ? [user]
-      : [];
+    const users: AppUser[] =
+      legacyUser?.role === "admin"
+        ? managedUsers
+        : user
+        ? [user]
+        : [];
 
-  return {
-    user,
-    users,
-    isAuthenticated: !!user,
-    canManageUsers: user?.role === "admin",
+    return {
+      user,
+      users,
+      isAuthenticated: !!user,
+      canManageUsers: user?.role === "admin",
 
-      
       login: async () => true,
       logout: async () => {
         await fetch("/api/auth/logout", {
@@ -257,6 +281,25 @@ export function CRMMain() {
 
   const allTags = useMemo(() => getAllTags(), [getAllTags]);
 
+  const salesUsers = useMemo(
+    () =>
+      auth.users.filter(
+        (u) => u.role === "sales_rep" || u.role === "team_lead" || u.role === "admin"
+      ),
+    [auth.users]
+  );
+
+  const {
+    notes: selectedCustomerNotes,
+    isLoading: isCustomerNotesLoading,
+    isAdding: isCustomerNoteAdding,
+    error: customerNotesError,
+    addNote: addCustomerTimelineNote,
+  } = useCustomerNotes({
+    customerId: selectedCustomer?.id ?? null,
+    enabled: !!selectedCustomer,
+  });
+
   const handleFormSubmit = (data: CustomerFormData) => {
     if (customerToEdit) {
       void updateCustomer(customerToEdit.id, data);
@@ -294,10 +337,21 @@ export function CRMMain() {
     }
   };
 
-  const handleAddNote = (note: string, type: ActivityType) => {
-    if (selectedCustomer) {
-      addContactNote(selectedCustomer.id, note, type);
-    }
+  const handleAddNote = async (payload: {
+    content: string;
+    noteDate?: string;
+    noteType?: "note" | "call" | "visit" | "meeting" | "offer" | "technical";
+  }) => {
+    if (!selectedCustomer) return;
+
+    await addCustomerTimelineNote({
+      content: payload.content,
+      noteDate: payload.noteDate,
+      noteType: payload.noteType ?? "note",
+      type: payload.noteType?.toUpperCase() || "NOTE",
+    });
+
+    addContactNote(selectedCustomer.id, payload.content, "note");
   };
 
   const handleAddActivity = (
@@ -331,6 +385,54 @@ export function CRMMain() {
     setTagFilter("all");
   };
 
+  const handleOpenPlannedVisitCreate = () => {
+    setPlannedVisitToEdit(null);
+    setIsPlannedVisitFormOpen(true);
+  };
+
+  const handleOpenPlannedVisitEdit = (visit: PlannedVisit) => {
+    setPlannedVisitToEdit(visit);
+    setIsPlannedVisitFormOpen(true);
+  };
+
+  const handlePlannedVisitSubmit = async (data: PlannedVisitFormData) => {
+    try {
+      setIsPlannedVisitSubmitting(true);
+
+      if (plannedVisitToEdit) {
+        await updatePlannedVisit(plannedVisitToEdit.id, data);
+        setPlannedVisitToEdit(null);
+      } else {
+        await createPlannedVisit(data);
+      }
+
+      setIsPlannedVisitFormOpen(false);
+      await loadPlannedVisits();
+    } finally {
+      setIsPlannedVisitSubmitting(false);
+    }
+  };
+
+  const handleConvertPlannedVisit = async (visit: PlannedVisit) => {
+    await convertPlannedVisitToCustomer(visit.id, {
+      customerData: {
+        company: visit.companyName,
+        name: visit.contactName || visit.companyName,
+        phone: visit.phone || "-",
+        email: visit.email || "",
+        city: visit.city || "",
+        district: visit.district || "",
+        address: visit.address || "",
+        sector: visit.sector || "",
+        locationNote: visit.locationNote || "",
+        notesText: visit.remoteNotes || "",
+      },
+    });
+
+    await loadPlannedVisits();
+    setActiveTab("list");
+  };
+
   if (authLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-100">
@@ -358,50 +460,49 @@ export function CRMMain() {
   return (
     <div className="min-h-screen bg-slate-100">
       <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/95 backdrop-blur">
-        <div className="mx-auto max-w-[1600px] px-4 sm:px-6 lg:px-8">
-          <div className="flex min-h-[76px] items-center justify-between gap-4">
-            <div className="flex items-center gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
+        <div className="mx-auto w-[calc(100%-24px)] md:w-[calc(100%-6cm)] px-0">
+          <div className="flex min-h-[64px] items-center justify-between gap-3 py-2">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-sm">
                 <Users className="h-5 w-5" />
               </div>
-              <div>
-                <h1 className="text-xl font-bold tracking-tight text-slate-900">
+
+              <div className="min-w-0">
+                <h1 className="line-clamp-2 text-lg font-bold leading-tight tracking-tight text-slate-900 sm:text-xl">
                   Müşteri Takip Sistemi
                 </h1>
-                <p className="text-xs text-slate-500">
+                <p className="truncate text-xs text-slate-500">
                   {auth.user?.name} • {roleLabels[auth.user?.role || "sales_rep"]}
                 </p>
               </div>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex shrink-0 items-center gap-2">
               {auth.canManageUsers && (
                 <Button
                   variant="outline"
-                  size="sm"
+                  size="icon"
                   onClick={() => setIsUserManagementOpen(true)}
-                  className="rounded-2xl border-slate-200"
+                  className="h-10 w-10 rounded-2xl border-slate-200"
                 >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span className="hidden sm:inline">Kullanıcılar</span>
+                  <Settings className="h-4 w-4" />
                 </Button>
               )}
 
               <Button
                 variant="outline"
-                size="sm"
+                size="icon"
                 onClick={handleNewCustomer}
-                className="rounded-2xl border-slate-200"
+                className="h-10 w-10 rounded-2xl border-slate-200"
               >
-                <Plus className="mr-2 h-4 w-4" />
-                <span className="hidden sm:inline">Yeni Müşteri</span>
+                <Plus className="h-4 w-4" />
               </Button>
 
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon"
                 onClick={auth.logout}
-                className="rounded-2xl"
+                className="h-10 w-10 rounded-2xl"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -410,8 +511,8 @@ export function CRMMain() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1600px] px-4 py-6 sm:px-6 lg:px-8">
-        <div className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <main className="mx-auto w-[calc(100%-24px)] md:w-[calc(100%-5cm)] px-0 py-4">
+        <div className="mb-3 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Toplam Müşteri" value={String(statistics.total || 0)} />
           <StatCard
             label="Aktif Teklif"
@@ -423,29 +524,35 @@ export function CRMMain() {
           />
           <StatCard
             label="Tahmini Hacim"
-            value={formatMoney(statistics.totalEstimatedValue)}
+            value={formatUsd(statistics.totalEstimatedValue)}
           />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <TabsList className="grid w-full max-w-[520px] grid-cols-3 rounded-2xl bg-slate-100 p-1">
-                <TabsTrigger value="list" className="rounded-xl">
-                  <LayoutGrid className="mr-2 h-4 w-4" />
-                  Liste
-                </TabsTrigger>
-                <TabsTrigger value="pipeline" className="rounded-xl">
-                  <Columns className="mr-2 h-4 w-4" />
-                  Pipeline
-                </TabsTrigger>
-                <TabsTrigger value="stats" className="rounded-xl">
-                  <BarChart3 className="mr-2 h-4 w-4" />
-                  İstatistikler
-                </TabsTrigger>
-              </TabsList>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-3.5 shadow-sm">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="w-full overflow-x-auto">
+                <TabsList className="grid min-w-[720px] grid-cols-4 rounded-2xl bg-slate-100 p-1">
+                  <TabsTrigger value="list" className="rounded-xl px-3 py-2 text-sm">
+                    <LayoutGrid className="mr-2 h-4 w-4" />
+                    Liste
+                  </TabsTrigger>
+                  <TabsTrigger value="pipeline" className="rounded-xl px-3 py-2 text-sm">
+                    <Columns className="mr-2 h-4 w-4" />
+                    Pipeline
+                  </TabsTrigger>
+                  <TabsTrigger value="stats" className="rounded-xl px-3 py-2 text-sm">
+                    <BarChart3 className="mr-2 h-4 w-4" />
+                    İstatistikler
+                  </TabsTrigger>
+                  <TabsTrigger value="visits" className="rounded-xl px-3 py-2 text-sm">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    Ziyaretler
+                  </TabsTrigger>
+                </TabsList>
+              </div>
 
-              <div className="flex items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-4 py-2 text-sm font-semibold text-violet-700">
+              <div className="flex shrink-0 items-center gap-2 rounded-2xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700">
                 <CircleDollarSign className="h-4 w-4" />
                 USD görünüm aktif
               </div>
@@ -453,78 +560,106 @@ export function CRMMain() {
           </div>
 
           <TabsContent value="list" className="space-y-4">
-            <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="mb-4 flex items-center gap-2">
-                <Filter className="h-4 w-4 text-slate-500" />
-                <h3 className="font-semibold text-slate-900">Arama ve Filtreler</h3>
+            <div className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm">
+              <div className="mb flex items-center justify-between gap-3">
+                <div className="mb flex items-center gap-4">
+                  <Filter className="h-6 w-4 text-slate-500" />
+                  <h3 className="text-[15px] font-semibold text-slate-900">Arama ve Filtreler</h3>
+                </div>
               </div>
 
-              <div className="flex flex-col gap-3 xl:flex-row">
-                <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                  <Input
-                    placeholder="Müşteri, firma, telefon veya etiket ara..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-12 rounded-2xl border-slate-200 bg-slate-50 pl-11"
-                  />
-                </div>
+              <div className="flex flex-col gap-2 xl:flex-row xl:items-center xl:justify-between">
+                <div className="flex min-w-0 flex-1 flex-col gap-3 xl:flex-row xl:items-center">
+                  <div className="relative min-w-0 flex-1 xl:max-w-[680px]">
+                    <Search className="absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <Input
+                      placeholder="Müşteri, firma, telefon veya etiket ara..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      className="h-8 rounded-2xl border-slate-200 bg-slate-50 pl-11"
+                    />
+                  </div>
 
-                <div className="flex flex-wrap gap-2">
-                  <Select
-                    value={statusFilter}
-                    onValueChange={(v) => setStatusFilter(v as CustomerStatus | "all")}
-                  >
-                    <SelectTrigger className="h-12 w-[160px] rounded-2xl border-slate-200 bg-slate-50">
-                      <SelectValue placeholder="Durum" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tüm Durumlar</SelectItem>
-                      {Object.entries(statusLabels).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  <Select
-                    value={probabilityFilter}
-                    onValueChange={(v) =>
-                      setProbabilityFilter(
-                        v as "all" | "high" | "medium" | "low" | "none"
-                      )
-                    }
-                  >
-                    <SelectTrigger className="h-12 w-[170px] rounded-2xl border-slate-200 bg-slate-50">
-                      <SelectValue placeholder="Olasılık" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Tüm Olasılıklar</SelectItem>
-                      {Object.entries(probabilityLabels).map(([key, label]) => (
-                        <SelectItem key={key} value={key}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-
-                  {allTags.length > 0 && (
-                    <Select value={tagFilter} onValueChange={setTagFilter}>
-                      <SelectTrigger className="h-12 w-[160px] rounded-2xl border-slate-200 bg-slate-50">
-                        <Tag className="mr-2 h-4 w-4" />
-                        <SelectValue placeholder="Etiket" />
+                  <div className="flex flex-wrap gap-2 xl:ml-1">
+                    <Select
+                      value={statusFilter}
+                      onValueChange={(v) => setStatusFilter(v as CustomerStatus | "all")}
+                    >
+                      <SelectTrigger className="h-8 w-[150px] rounded-2xl border-slate-200 bg-slate-50">
+                        <SelectValue placeholder="Durum" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="all">Tüm Etiketler</SelectItem>
-                        {allTags.map((tag) => (
-                          <SelectItem key={tag} value={tag}>
-                            {tag}
+                        <SelectItem value="all">Tüm Durumlar</SelectItem>
+                        {Object.entries(statusLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
-                  )}
+
+                    <Select
+                      value={probabilityFilter}
+                      onValueChange={(v) =>
+                        setProbabilityFilter(v as "all" | "high" | "medium" | "low" | "none")
+                      }
+                    >
+                      <SelectTrigger className="h-8 w-[155px] rounded-2xl border-slate-200 bg-slate-50">
+                        <SelectValue placeholder="Olasılık" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Tüm Olasılıklar</SelectItem>
+                        {Object.entries(probabilityLabels).map(([key, label]) => (
+                          <SelectItem key={key} value={key}>
+                            {label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    {allTags.length > 0 && (
+                      <Select value={tagFilter} onValueChange={setTagFilter}>
+                        <SelectTrigger className="h-8 w-[150px] rounded-2xl border-slate-200 bg-slate-50">
+                          <Tag className="mr-2 h-4 w-4" />
+                          <SelectValue placeholder="Etiket" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">Tüm Etiketler</SelectItem>
+                          {allTags.map((tag) => (
+                            <SelectItem key={tag} value={tag}>
+                              {tag}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                  </div>
+                </div>
+
+                <div className="xl:ml-6">
+                  <div className="flex items-center rounded-2xl border border-slate-200 bg-slate-50 p-1">
+                    <Button
+                      type="button"
+                      variant={customerViewMode === "card" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setCustomerViewMode("card")}
+                      className="rounded-xl"
+                    >
+                      <LayoutGrid className="mr-2 h-4 w-4" />
+                      Kart
+                    </Button>
+
+                    <Button
+                      type="button"
+                      variant={customerViewMode === "list" ? "default" : "ghost"}
+                      size="sm"
+                      onClick={() => setCustomerViewMode("list")}
+                      className="rounded-xl"
+                    >
+                      <Rows3 className="mr-2 h-4 w-4" />
+                      Liste
+                    </Button>
+                  </div>
                 </div>
               </div>
 
@@ -549,20 +684,34 @@ export function CRMMain() {
             </div>
 
             {filteredCustomers.length === 0 ? (
-              <div className="rounded-3xl border border-slate-200 bg-white p-10 text-center shadow-sm">
+              <div className="rounded-2xl border border-slate-200 bg-white p-10 text-center shadow-sm">
                 <Users className="mx-auto mb-4 h-12 w-12 text-slate-300" />
                 <h3 className="mb-2 text-lg font-semibold text-slate-900">
                   Müşteri bulunamadı
                 </h3>
-                <Button onClick={handleNewCustomer} variant="outline" className="rounded-2xl border-slate-200">
+                <Button
+                  onClick={handleNewCustomer}
+                  variant="outline"
+                  className="rounded-2xl border-slate-200"
+                >
                   <Plus className="mr-2 h-4 w-4" />
                   Yeni Müşteri Ekle
                 </Button>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-3">
+            ) : customerViewMode === "card" ? (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                 {filteredCustomers.map((customer) => (
-                  <CustomerListCard
+                  <CustomerCard
+                    key={customer.id}
+                    customer={customer}
+                    onClick={() => handleCustomerClick(customer)}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {filteredCustomers.map((customer) => (
+                  <CustomerListRow
                     key={customer.id}
                     customer={customer}
                     onClick={() => handleCustomerClick(customer)}
@@ -573,13 +722,33 @@ export function CRMMain() {
           </TabsContent>
 
           <TabsContent value="pipeline">
-            <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
               <PipelineView
                 customers={customers}
                 onCustomerClick={handleCustomerClick}
                 onStatusChange={handleStatusChange}
               />
             </div>
+          </TabsContent>
+
+          <TabsContent value="visits">
+            <PlannedVisitsView
+              plannedVisits={plannedVisits}
+              isLoading={plannedVisitsLoading}
+              error={plannedVisitsError}
+              onCreate={handleOpenPlannedVisitCreate}
+              onEdit={handleOpenPlannedVisitEdit}
+              onRefresh={async () => {
+  await loadPlannedVisits();
+}}
+              onDelete={async (visit) => {
+                await deletePlannedVisit(visit.id);
+              }}
+              onUpdateStatus={async (visit, status) => {
+                await updatePlannedVisit(visit.id, { status });
+              }}
+              onConvert={handleConvertPlannedVisit}
+            />
           </TabsContent>
 
           <TabsContent value="stats">
@@ -606,6 +775,43 @@ export function CRMMain() {
         allTags={allTags}
       />
 
+      <Dialog
+        open={isPlannedVisitFormOpen}
+        onOpenChange={(open) => {
+          setIsPlannedVisitFormOpen(open);
+          if (!open) {
+            setPlannedVisitToEdit(null);
+          }
+        }}
+      >
+        <DialogContent className="w-[min(920px,calc(100vw-32px))] rounded-3xl p-0 sm:max-w-none">
+          <div className="border-b border-slate-100 px-6 py-5">
+            <DialogHeader>
+              <DialogTitle className="text-xl text-slate-900">
+                {plannedVisitToEdit ? "Ziyaret Planını Düzenle" : "Yeni Ziyaret Planı"}
+              </DialogTitle>
+              <DialogDescription>
+                Aday müşteri kaydını planlanan ziyaret havuzuna ekleyin.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="max-h-[80vh] overflow-y-auto px-6 py-5">
+            <PlannedVisitForm
+              visit={plannedVisitToEdit}
+              salesReps={salesUsers}
+              currentUser={auth.user}
+              onSubmit={handlePlannedVisitSubmit}
+              onCancel={() => {
+                setIsPlannedVisitFormOpen(false);
+                setPlannedVisitToEdit(null);
+              }}
+              isSubmitting={isPlannedVisitSubmitting}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <CustomerTechnicalForm
         customer={selectedCustomer}
         isOpen={isTechnicalFormOpen}
@@ -631,6 +837,10 @@ export function CRMMain() {
         onCompleteActivity={completeActivity}
         onStatusChange={handleStatusChange}
         activities={selectedCustomer ? getCustomerActivities(selectedCustomer.id) : []}
+        customerNotes={selectedCustomerNotes}
+        customerNotesLoading={isCustomerNotesLoading}
+        customerNotesAdding={isCustomerNoteAdding}
+        customerNotesError={customerNotesError}
         getUserName={getUserName}
         canDelete={auth.user?.role === "admin"}
       />
@@ -682,85 +892,61 @@ export function CRMMain() {
 
 function StatCard({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-4 shadow-sm">
       <div className="text-sm text-slate-500">{label}</div>
-      <div className="mt-2 text-3xl font-bold tracking-tight text-slate-900">
+      <div className="mt-2 text-3xl font-bold leading-none tracking-tight text-slate-900">
         {value}
       </div>
     </div>
   );
 }
 
-interface CustomerListCardProps {
+interface CustomerListRowProps {
   customer: Customer;
   onClick: () => void;
 }
 
-function CustomerListCard({ customer, onClick }: CustomerListCardProps) {
+function CustomerListRow({ customer, onClick }: CustomerListRowProps) {
   return (
     <div
       onClick={onClick}
-      className="cursor-pointer rounded-3xl border border-slate-200 bg-white p-5 shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md"
+      className="cursor-pointer rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:bg-slate-50"
     >
-      <div className="mb-4 flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate text-lg font-bold text-slate-900">{customer.name}</h3>
-          {customer.company && (
-            <div className="mt-1 flex items-center text-sm text-slate-500">
-              <Building2 className="mr-1.5 h-4 w-4" />
-              <span className="truncate">{customer.company}</span>
-            </div>
-          )}
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-[2fr_1.4fr_1fr_1fr_1fr] lg:items-center">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-slate-900">
+            {customer.name}
+          </div>
+          <div className="mt-0.5 truncate text-xs text-slate-500">
+            {customer.company || "-"}
+          </div>
         </div>
 
-        <Badge
-          variant="outline"
-          className={`border px-3 py-1 text-xs font-semibold ${
-            probabilityTone[customer.probability]
-          }`}
-        >
-          {probabilityLabels[customer.probability]}
-        </Badge>
-      </div>
+        <div className="text-sm text-slate-700">{customer.phone || "-"}</div>
 
-      <div className="grid grid-cols-2 gap-3 text-sm">
-        <div className="rounded-2xl bg-slate-50 p-3">
-          <div className="mb-1 text-slate-500">Telefon</div>
-          <div className="font-medium text-slate-900">{customer.phone}</div>
-        </div>
-
-        <div className="rounded-2xl bg-slate-50 p-3">
-          <div className="mb-1 text-slate-500">Durum</div>
-          <div className="font-medium text-slate-900">
+        <div>
+          <Badge
+            variant="outline"
+            className="rounded-full border-slate-200 bg-white text-[11px]"
+          >
             {statusLabels[customer.status]}
-          </div>
+          </Badge>
         </div>
 
-        <div className="col-span-2 rounded-2xl bg-slate-50 p-3">
-          <div className="mb-1 text-slate-500">Tahmini Proje</div>
-          <div className="text-xl font-semibold text-slate-900">
-            {formatMoney(customer.estimatedValue)}
-          </div>
+        <div>
+          <Badge
+            variant="outline"
+            className={`border px-2 py-0.5 text-[10px] font-semibold ${
+              probabilityTone[customer.probability]
+            }`}
+          >
+            {probabilityLabels[customer.probability]}
+          </Badge>
         </div>
-      </div>
 
-      <div className="mt-4 flex items-center justify-between border-t border-slate-100 pt-4">
-        <Badge variant="outline" className="rounded-full border-slate-200 bg-white">
-          {statusLabels[customer.status]}
-        </Badge>
-
-        {customer.tags.length > 0 && (
-          <div className="flex gap-1">
-            {customer.tags.slice(0, 2).map((tag, i) => (
-              <span
-                key={i}
-                className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] text-slate-700"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
+        <div className="text-sm font-semibold text-emerald-600">
+          {formatUsd(statisticsSafeValue(customer.estimatedValue))}
+        </div>
       </div>
     </div>
   );
@@ -773,9 +959,13 @@ const probabilityTone: Record<Customer["probability"], string> = {
   none: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
-function formatMoney(value?: number | null) {
+function statisticsSafeValue(value?: number | null) {
+  return value ?? null;
+}
+
+function formatUsd(value?: number | null) {
   if (value == null) return "-";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "USD",
     maximumFractionDigits: 0,

@@ -15,8 +15,17 @@ function mapActivityType(value: unknown) {
     "CALL",
     "MEETING",
     "TASK",
+    "VISIT",
+    "OFFER",
+    "TECHNICAL",
   ];
   return allowed.includes(v) ? v : "NOTE";
+}
+
+function normalizeNoteType(value: unknown) {
+  const v = String(value || "").trim().toLowerCase();
+  const allowed = ["note", "call", "visit", "meeting", "offer", "technical"];
+  return allowed.includes(v) ? v : "note";
 }
 
 type Params = {
@@ -39,7 +48,7 @@ export async function GET(_: NextRequest, { params }: Params) {
           select: { id: true, name: true, email: true },
         },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ noteDate: "desc" }, { createdAt: "desc" }],
     });
 
     return NextResponse.json({ notes }, { status: 200 });
@@ -64,11 +73,18 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ message: "Not içeriği zorunludur." }, { status: 400 });
     }
 
+    const noteType = normalizeNoteType(body.noteType);
+    const noteDateRaw = body.noteDate ? new Date(body.noteDate) : null;
+    const noteDate =
+      noteDateRaw && !Number.isNaN(noteDateRaw.getTime()) ? noteDateRaw : new Date();
+
     const note = await prisma.customerNote.create({
       data: {
         customerId: id,
         authorId: currentUser.id,
         content,
+        noteType,
+        noteDate,
       },
       include: {
         author: {
@@ -81,7 +97,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       data: {
         customerId: id,
         userId: currentUser.id,
-        type: mapActivityType(body.type) as never,
+        type: mapActivityType(body.type || noteType) as never,
         description: content,
       },
     });

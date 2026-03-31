@@ -148,7 +148,7 @@ export function UserManagement({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-5xl max-h-[92vh] overflow-hidden sm:w-[calc(100vw-3rem)]">
         <DialogHeader>
           <DialogTitle className="flex justify-between items-center">
             <span>Kullanıcı Yönetimi</span>

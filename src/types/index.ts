@@ -129,6 +129,10 @@ export interface Customer {
   statusNote?: string | null;
   siteMediaNotes?: string | null;
   fileLink?: string | null;
+  buildingPermit?: boolean | null;
+  siteVisitPhotos?: string[];
+  visibilityScope?: "public" | "admin_only" | "team_lead_only" | "assigned_only" | "restricted";
+  visibilityUserIds?: string[];
 }
 
 // ==================== ACTIVITY TYPES ====================
@@ -192,6 +196,10 @@ export interface CustomerFormData {
   createdBy?: string;
   facilityName?: string;
   contactName?: string;
+  buildingPermit?: boolean | null;
+  siteVisitPhotos?: string[];
+  visibilityScope?: "public" | "admin_only" | "team_lead_only" | "assigned_only" | "restricted";
+  visibilityUserIds?: string[];
 }
 
 export interface UserFormData {

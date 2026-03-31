@@ -4,12 +4,13 @@ import * as React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   Users,
-  DollarSign,
   Target,
-  Phone,
   Calendar,
   Clock,
   TrendingUp,
+  CircleDollarSign,
+  Phone,
+  BarChart3,
 } from "lucide-react";
 import type { Customer, Activity } from "@/types";
 import { statusLabels, activityLabels } from "@/types";
@@ -54,120 +55,132 @@ export function Dashboard({
   };
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+    <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <MetricCard
           title="Toplam Müşteri"
           value={stats.total ?? 0}
           icon={Users}
-          color="bg-blue-500"
+          tone="blue"
         />
         <MetricCard
           title="Tahmini Değer"
           value={formatCurrency(stats.totalEstimatedValue ?? 0)}
-          icon={DollarSign}
-          color="bg-green-500"
+          icon={CircleDollarSign}
+          tone="green"
         />
         <MetricCard
           title="Ağırlıklı Tahmin"
           value={formatCurrency(stats.weightedForecast ?? 0)}
           icon={Target}
-          color="bg-purple-500"
+          tone="violet"
         />
         <MetricCard
           title="Dönüşüm Oranı"
           value={`%${stats.conversionRate ?? 0}`}
           icon={TrendingUp}
-          color="bg-orange-500"
+          tone="amber"
         />
       </div>
 
-      <Card>
+      <Card className="rounded-2xl border-slate-200 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg flex items-center">
-            <Target className="w-5 h-5 mr-2" />
+          <CardTitle className="flex items-center text-base font-semibold text-slate-900">
+            <BarChart3 className="mr-2 h-4 w-4" />
             Satış Hunisi Durumu
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-3">
-            <PipelineBar
-              label={statusLabels.new}
-              count={byStatus.new}
-              total={stats.total ?? 0}
-              color="bg-gray-500"
-            />
-            <PipelineBar
-              label={statusLabels.contacted}
-              count={byStatus.contacted}
-              total={stats.total ?? 0}
-              color="bg-blue-500"
-            />
-            <PipelineBar
-              label={statusLabels.qualified}
-              count={byStatus.qualified}
-              total={stats.total ?? 0}
-              color="bg-indigo-500"
-            />
-            <PipelineBar
-              label={statusLabels.proposal}
-              count={byStatus.proposal}
-              total={stats.total ?? 0}
-              color="bg-purple-500"
-            />
-            <PipelineBar
-              label={statusLabels.negotiation}
-              count={byStatus.negotiation}
-              total={stats.total ?? 0}
-              color="bg-yellow-500"
-            />
-            <PipelineBar
-              label={statusLabels.closed_won}
-              count={byStatus.closed_won}
-              total={stats.total ?? 0}
-              color="bg-green-500"
-            />
-          </div>
+        <CardContent className="space-y-3">
+          <PipelineBar
+            label={statusLabels.new}
+            count={byStatus.new}
+            total={stats.total ?? 0}
+            tone="bg-slate-500"
+          />
+          <PipelineBar
+            label={statusLabels.contacted}
+            count={byStatus.contacted}
+            total={stats.total ?? 0}
+            tone="bg-sky-500"
+          />
+          <PipelineBar
+            label={statusLabels.qualified}
+            count={byStatus.qualified}
+            total={stats.total ?? 0}
+            tone="bg-indigo-500"
+          />
+          <PipelineBar
+            label={statusLabels.proposal}
+            count={byStatus.proposal}
+            total={stats.total ?? 0}
+            tone="bg-violet-500"
+          />
+          <PipelineBar
+            label={statusLabels.negotiation}
+            count={byStatus.negotiation}
+            total={stats.total ?? 0}
+            tone="bg-amber-500"
+          />
+          <PipelineBar
+            label={statusLabels.closed_won}
+            count={byStatus.closed_won}
+            total={stats.total ?? 0}
+            tone="bg-emerald-500"
+          />
+          <PipelineBar
+            label={statusLabels.closed_lost}
+            count={byStatus.closed_lost}
+            total={stats.total ?? 0}
+            tone="bg-rose-500"
+          />
         </CardContent>
       </Card>
 
-      <div className="grid md:grid-cols-2 gap-6">
-        <Card>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card className="rounded-2xl border-slate-200 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center">
-              <Clock className="w-5 h-5 mr-2" />
+            <CardTitle className="flex items-center text-base font-semibold text-slate-900">
+              <Clock className="mr-2 h-4 w-4" />
               Yaklaşan Görevler
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-64">
+            <ScrollArea className="h-72">
               {upcomingActivities.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-8">
+                <p className="py-8 text-center text-sm text-slate-400">
                   Yaklaşan görev bulunmuyor
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {upcomingActivities.slice(0, 10).map((activity) => (
                     <div
                       key={activity.id}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
                     >
-                      <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Calendar className="w-4 h-4 text-blue-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {activity.description}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <Badge variant="outline" className="text-xs">
-                            {activityLabels[activity.type]}
-                          </Badge>
-                          {activity.dueDate && (
-                            <span className="text-xs text-gray-500">
-                              {formatDate(activity.dueDate)}
-                            </span>
-                          )}
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-600">
+                          <Calendar className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {activity.description}
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className="rounded-full border-slate-200 bg-white text-[11px]"
+                            >
+                              {activityLabels[activity.type]}
+                            </Badge>
+
+                            {activity.dueDate ? (
+                              <span className="text-xs text-slate-500">
+                                {formatDateTime(activity.dueDate)}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -178,42 +191,50 @@ export function Dashboard({
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="rounded-2xl border-slate-200 shadow-sm">
           <CardHeader className="pb-2">
-            <CardTitle className="text-lg flex items-center">
-              <Users className="w-5 h-5 mr-2" />
+            <CardTitle className="flex items-center text-base font-semibold text-slate-900">
+              <Users className="mr-2 h-4 w-4" />
               Son Eklenen Müşteriler
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <ScrollArea className="h-64">
+            <ScrollArea className="h-72">
               {recentCustomers.length === 0 ? (
-                <p className="text-sm text-gray-500 text-center py-8">
+                <p className="py-8 text-center text-sm text-slate-400">
                   Henüz müşteri eklenmemiş
                 </p>
               ) : (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   {recentCustomers.slice(0, 10).map((customer) => (
                     <div
                       key={customer.id}
-                      className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg"
+                      className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
                     >
-                      <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                        <Phone className="w-4 h-4 text-green-600" />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {customer.name}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span className="text-xs text-gray-500">
-                            {statusLabels[customer.status]}
-                          </span>
-                          {customer.estimatedValue && (
-                            <span className="text-xs text-green-600">
-                              {formatCurrency(customer.estimatedValue)}
-                            </span>
-                          )}
+                      <div className="flex items-start gap-3">
+                        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600">
+                          <Phone className="h-4 w-4" />
+                        </div>
+
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-slate-900">
+                            {customer.name}
+                          </p>
+
+                          <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className="rounded-full border-slate-200 bg-white text-[11px]"
+                            >
+                              {statusLabels[customer.status]}
+                            </Badge>
+
+                            {customer.estimatedValue ? (
+                              <span className="text-xs font-medium text-emerald-600">
+                                {formatCurrency(customer.estimatedValue)}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -225,36 +246,34 @@ export function Dashboard({
         </Card>
       </div>
 
-      <Card>
+      <Card className="rounded-2xl border-slate-200 shadow-sm">
         <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Aylık Performans</CardTitle>
+          <CardTitle className="text-base font-semibold text-slate-900">
+            Aylık Performans
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
-                {stats.monthlyNew ?? 0}
-              </div>
-              <div className="text-sm text-gray-100">Yeni Müşteri</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {stats.monthlyClosed ?? 0}
-              </div>
-              <div className="text-sm text-gray-600">Kapanan Satış</div>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {byProbability.high}
-              </div>
-              <div className="text-sm text-gray-600">Yüksek İhtimal</div>
-            </div>
-            <div className="text-center p-4 bg-orange-50 rounded-lg">
-              <div className="text-2xl font-bold text-orange-600">
-                {byProbability.medium + byProbability.low}
-              </div>
-              <div className="text-sm text-gray-600">Potansiyel</div>
-            </div>
+          <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+            <MiniStatBox
+              value={stats.monthlyNew ?? 0}
+              label="Yeni Müşteri"
+              tone="blue"
+            />
+            <MiniStatBox
+              value={stats.monthlyClosed ?? 0}
+              label="Kapanan Satış"
+              tone="green"
+            />
+            <MiniStatBox
+              value={byProbability.high}
+              label="Yüksek İhtimal"
+              tone="violet"
+            />
+            <MiniStatBox
+              value={byProbability.medium + byProbability.low}
+              label="Potansiyel"
+              tone="amber"
+            />
           </div>
         </CardContent>
       </Card>
@@ -266,20 +285,32 @@ interface MetricCardProps {
   title: string;
   value: string | number;
   icon: React.ElementType;
-  color: string;
+  tone: "blue" | "green" | "violet" | "amber";
 }
 
-function MetricCard({ title, value, icon: Icon, color }: MetricCardProps) {
+function MetricCard({ title, value, icon: Icon, tone }: MetricCardProps) {
+  const toneMap = {
+    blue: "bg-blue-100 text-blue-600",
+    green: "bg-emerald-100 text-emerald-600",
+    violet: "bg-violet-100 text-violet-600",
+    amber: "bg-amber-100 text-amber-600",
+  };
+
   return (
-    <Card>
+    <Card className="rounded-2xl border-slate-200 shadow-sm">
       <CardContent className="p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-gray-500">{title}</p>
-            <p className="text-xl font-bold mt-1">{value}</p>
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm text-slate-500">{title}</p>
+            <p className="mt-2 truncate text-2xl font-bold leading-none text-slate-900">
+              {value}
+            </p>
           </div>
-          <div className={`${color} p-3 rounded-lg`}>
-            <Icon className="w-5 h-5 text-white" />
+
+          <div
+            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${toneMap[tone]}`}
+          >
+            <Icon className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -291,21 +322,22 @@ interface PipelineBarProps {
   label: string;
   count: number;
   total: number;
-  color: string;
+  tone: string;
 }
 
-function PipelineBar({ label, count, total, color }: PipelineBarProps) {
+function PipelineBar({ label, count, total, tone }: PipelineBarProps) {
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
   return (
     <div>
-      <div className="flex justify-between text-sm mb-1">
-        <span>{label}</span>
-        <span className="font-medium">{count}</span>
+      <div className="mb-1.5 flex justify-between text-sm">
+        <span className="text-slate-600">{label}</span>
+        <span className="font-semibold text-slate-900">{count}</span>
       </div>
-      <div className="w-full bg-gray-200 rounded-full h-2">
+
+      <div className="h-2.5 w-full rounded-full bg-slate-200">
         <div
-          className={`${color} h-2 rounded-full transition-all duration-300`}
+          className={`${tone} h-2.5 rounded-full transition-all duration-300`}
           style={{ width: `${percentage}%` }}
         />
       </div>
@@ -313,19 +345,47 @@ function PipelineBar({ label, count, total, color }: PipelineBarProps) {
   );
 }
 
-function formatCurrency(value: number): string {
-  if (value >= 1000000) {
-    return `${(value / 1000000).toFixed(1)}M ₺`;
-  }
-  if (value >= 1000) {
-    return `${(value / 1000).toFixed(0)}K ₺`;
-  }
-  return `${value} ₺`;
+function MiniStatBox({
+  value,
+  label,
+  tone,
+}: {
+  value: string | number;
+  label: string;
+  tone: "blue" | "green" | "violet" | "amber";
+}) {
+  const toneMap = {
+    blue: "bg-blue-50 text-blue-600",
+    green: "bg-emerald-50 text-emerald-600",
+    violet: "bg-violet-50 text-violet-600",
+    amber: "bg-amber-50 text-amber-600",
+  };
+
+  return (
+    <div className={`rounded-2xl p-4 text-center ${toneMap[tone]}`}>
+      <div className="text-2xl font-bold">{value}</div>
+      <div className="mt-1 text-sm text-slate-600">{label}</div>
+    </div>
+  );
 }
 
-function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString("tr-TR", {
-    day: "numeric",
-    month: "short",
-  });
+function formatCurrency(value: number): string {
+  if (value >= 1000000) {
+    return `${(value / 1000000).toFixed(1)} Mn $`;
+  }
+  if (value >= 1000) {
+    return `${(value / 1000).toFixed(0)} Bin $`;
+  }
+  return `${value.toLocaleString("tr-TR")} $`;
+}
+
+function formatDateTime(date?: string) {
+  if (!date) return "-";
+  const d = new Date(date);
+  return Number.isNaN(d.getTime())
+    ? date
+    : d.toLocaleString("tr-TR", {
+        dateStyle: "short",
+        timeStyle: "short",
+      });
 }

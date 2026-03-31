@@ -23,6 +23,8 @@ export type CustomerTechnicalFormData = {
   hybridInverterPreference?: string;
   wantsAlternativeProposal?: boolean | null;
   alternativeProposalNotes?: string;
+  buildingPermit?: boolean | null;
+  siteVisitPhotos?: string[];
 };
 
 type LegacyUser = {
@@ -39,29 +41,32 @@ type ApiResponse = { message?: string; customers?: ApiCustomer[] } & Record<stri
 
 const emptyActivities: Activity[] = [];
 
-// ============ HELPER FONKSİYONLAR ============
-
 function asString(value: unknown): string {
-  if (value === null || value === undefined) return "";
+  if (value == null) return "";
   return String(value);
 }
 
 function asNullableString(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
+  if (value == null) return null;
   const str = String(value).trim();
   return str || null;
 }
 
 function asNullableBoolean(value: unknown): boolean | null {
-  if (value === null || value === undefined) return null;
+  if (value == null) return null;
   if (typeof value === "boolean") return value;
   if (typeof value === "string") {
     const lower = value.toLowerCase();
-    if (lower === "true" || lower === "1" || lower === "yes") return true;
-    if (lower === "false" || lower === "0" || lower === "no") return false;
+    if (["true", "1", "yes", "evet"].includes(lower)) return true;
+    if (["false", "0", "no", "hayir", "hayır"].includes(lower)) return false;
   }
   if (typeof value === "number") return Boolean(value);
   return null;
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
 }
 
 function toNullableString(value: unknown): string | null {
@@ -82,92 +87,46 @@ function toNullableDate(value: unknown): string | null {
   return str ? str : null;
 }
 
-// ============ NORMALIZE FONKSİYONLARI ============
-
 function normalizeStatus(value: unknown): Customer["status"] {
   const v = String(value || "").toLowerCase();
-
-  if (
-    v === "new" ||
-    v === "contacted" ||
-    v === "qualified" ||
-    v === "proposal" ||
-    v === "negotiation" ||
-    v === "closed_won" ||
-    v === "closed_lost"
-  ) {
-    return v;
+  if (["new", "contacted", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"].includes(v)) {
+    return v as Customer["status"];
   }
-
   switch (String(value || "").toUpperCase()) {
-    case "NEW":
-      return "new";
-    case "CONTACTED":
-      return "contacted";
-    case "QUALIFIED":
-      return "qualified";
-    case "PROPOSAL":
-      return "proposal";
-    case "NEGOTIATION":
-      return "negotiation";
-    case "WON":
-      return "closed_won";
-    case "LOST":
-      return "closed_lost";
-    default:
-      return "new";
+    case "NEW": return "new";
+    case "CONTACTED": return "contacted";
+    case "QUALIFIED": return "qualified";
+    case "PROPOSAL": return "proposal";
+    case "NEGOTIATION": return "negotiation";
+    case "WON": return "closed_won";
+    case "LOST": return "closed_lost";
+    default: return "new";
   }
 }
 
 function normalizeProbability(value: unknown): Customer["probability"] {
   const v = String(value || "").toLowerCase();
-
-  if (v === "high" || v === "medium" || v === "low" || v === "none") {
-    return v;
-  }
-
+  if (["high", "medium", "low", "none"].includes(v)) return v as Customer["probability"];
   switch (String(value || "").toUpperCase()) {
-    case "HIGH":
-      return "high";
-    case "LOW":
-      return "low";
-    case "MEDIUM":
-    default:
-      return "medium";
+    case "HIGH": return "high";
+    case "LOW": return "low";
+    default: return "medium";
   }
 }
 
 function normalizeSource(value: unknown): Customer["source"] {
   const v = String(value || "").toLowerCase();
-
-  if (
-    v === "referral" ||
-    v === "cold_call" ||
-    v === "social_media" ||
-    v === "website" ||
-    v === "email" ||
-    v === "event" ||
-    v === "other"
-  ) {
-    return v;
+  if (["referral", "cold_call", "social_media", "website", "email", "event", "other"].includes(v)) {
+    return v as Customer["source"];
   }
-
   switch (String(value || "").toUpperCase()) {
-    case "WEBSITE":
-      return "website";
-    case "REFERRAL":
-      return "referral";
-    case "PHONE":
-      return "cold_call";
-    case "EMAIL":
-      return "email";
-    case "SOCIAL_MEDIA":
-      return "social_media";
-    case "WALK_IN":
-      return "event";
-    case "OTHER":
-    default:
-      return "other";
+    case "WEBSITE": return "website";
+    case "REFERRAL": return "referral";
+    case "PHONE": return "cold_call";
+    case "EMAIL": return "email";
+    case "SOCIAL_MEDIA": return "social_media";
+    case "WALK_IN": return "event";
+    default: return "other";
   }
 }
 
@@ -178,29 +137,16 @@ function normalizeActivityType(value: unknown): ActivityType {
 }
 
 function normalizeActivity(raw: Record<string, unknown>): Activity {
-  const now = new Date().toISOString();
-
   return {
-    id: String(raw.id || ""),
-    customerId: String(raw.customerId || ""),
+    id: String(raw.id ?? ""),
+    customerId: String(raw.customerId ?? ""),
     type: normalizeActivityType(raw.type),
     description: asString(raw.description),
-    dueDate: raw.dueDate 
-      ? new Date(String(raw.dueDate)).toISOString().slice(0, 10) 
-      : undefined,
+    createdBy: asString(raw.createdBy ?? raw.userId ?? (typeof raw.user === "object" && raw.user ? (raw.user as Record<string, unknown>).id : undefined)),
+    createdAt: raw.createdAt ? new Date(String(raw.createdAt)).toISOString() : new Date().toISOString(),
+    dueDate: raw.dueDate ? new Date(String(raw.dueDate)).toISOString() : undefined,
     isCompleted: Boolean(raw.isCompleted),
-
-    createdAt: raw.createdAt 
-      ? new Date(String(raw.createdAt)).toISOString() 
-      : now,
-
-    // updatedAt sadece Activity tipinde varsa ekle
-    ...(typeof raw.updatedAt !== "undefined" && {
-      updatedAt: new Date(String(raw.updatedAt)).toISOString()
-    }),
-
-    createdBy: asNullableString(raw.createdBy) || undefined,
-  } as Activity;   // son çare olarak type assertion (güvenli kullanımda)
+  };
 }
 
 function normalizeCustomer(raw: ApiCustomer): Customer {
@@ -213,23 +159,20 @@ function normalizeCustomer(raw: ApiCustomer): Customer {
     address: asNullableString(raw.address),
     probability: normalizeProbability(raw.probability),
     estimatedValue: raw.estimatedValue != null ? Number(raw.estimatedValue) : null,
-    expectedCloseDate: raw.expectedCloseDate
-      ? new Date(raw.expectedCloseDate as string).toISOString().slice(0, 10)
-      : null,
-     assignedTo: asString(raw.assignedToId ?? raw.assignedTo),
-     teamLeadId: asString(raw.teamLeadId),
-     createdBy: asString(raw.createdById ?? raw.createdBy),
+    expectedCloseDate: raw.expectedCloseDate ? new Date(String(raw.expectedCloseDate)).toISOString().slice(0, 10) : null,
+    assignedTo: asString(raw.assignedToId ?? raw.assignedTo),
+    teamLeadId: asNullableString(raw.teamLeadId),
+    createdBy: asString(raw.createdById ?? raw.createdBy),
     status: normalizeStatus(raw.status),
     source: normalizeSource(raw.source),
-    tags: Array.isArray(raw.tags) ? raw.tags.filter((t): t is string => typeof t === "string") : [],
-    notes: asString(raw.notesText),
-    lastContact: raw.lastContact ? new Date(raw.lastContact as string).toISOString().slice(0, 10) : null,
+    tags: asStringArray(raw.tags),
+    notes: asString(raw.notesText ?? raw.notes),
+    lastContact: raw.lastContact ? new Date(String(raw.lastContact)).toISOString().slice(0, 10) : null,
     lastContactNotes: asString(raw.lastContactNotes),
-    createdAt: raw.createdAt ? new Date(raw.createdAt as string).toISOString() : new Date().toISOString(),
-    updatedAt: raw.updatedAt ? new Date(raw.updatedAt as string).toISOString() : new Date().toISOString(),
-
+    createdAt: raw.createdAt ? new Date(String(raw.createdAt)).toISOString() : new Date().toISOString(),
+    updatedAt: raw.updatedAt ? new Date(String(raw.updatedAt)).toISOString() : new Date().toISOString(),
     recordNo: asNullableString(raw.recordNo),
-    recordDate: raw.recordDate ? new Date(raw.recordDate as string).toISOString().slice(0, 10) : null,
+    recordDate: raw.recordDate ? new Date(String(raw.recordDate)).toISOString().slice(0, 10) : null,
     city: asNullableString(raw.city),
     district: asNullableString(raw.district),
     facilityName: asNullableString(raw.facilityName),
@@ -261,7 +204,7 @@ function normalizeCustomer(raw: ApiCustomer): Customer {
     alternativeProposalNotes: asNullableString(raw.alternativeProposalNotes),
     requestedWorkType: asNullableString(raw.requestedWorkType)?.toLowerCase() ?? null,
     proposalGiven: asNullableBoolean(raw.proposalGiven),
-    proposalDate: raw.proposalDate ? new Date(raw.proposalDate as string).toISOString().slice(0, 10) : null,
+    proposalDate: raw.proposalDate ? new Date(String(raw.proposalDate)).toISOString().slice(0, 10) : null,
     proposalNo: asNullableString(raw.proposalNo),
     proposalAmountVatExcl: raw.proposalAmountVatExcl != null ? Number(raw.proposalAmountVatExcl) : null,
     proposalAmountVatIncl: raw.proposalAmountVatIncl != null ? Number(raw.proposalAmountVatIncl) : null,
@@ -269,7 +212,7 @@ function normalizeCustomer(raw: ApiCustomer): Customer {
     estimatedProfit: raw.estimatedProfit != null ? Number(raw.estimatedProfit) : null,
     estimatedProfitRate: raw.estimatedProfitRate != null ? Number(raw.estimatedProfitRate) : null,
     stage: asNullableString(raw.stage)?.toLowerCase() ?? null,
-    lastMeetingDate: raw.lastMeetingDate ? new Date(raw.lastMeetingDate as string).toISOString().slice(0, 10) : null,
+    lastMeetingDate: raw.lastMeetingDate ? new Date(String(raw.lastMeetingDate)).toISOString().slice(0, 10) : null,
     result: asNullableString(raw.result)?.toLowerCase() ?? null,
     lostReason: asNullableString(raw.lostReason),
     competitor: asNullableString(raw.competitor),
@@ -280,30 +223,24 @@ function normalizeCustomer(raw: ApiCustomer): Customer {
     paymentStatus: asNullableString(raw.paymentStatus)?.toLowerCase() ?? null,
     receivedPayment: raw.receivedPayment != null ? Number(raw.receivedPayment) : null,
     remainingReceivable: raw.remainingReceivable != null ? Number(raw.remainingReceivable) : null,
-    jobStartDate: raw.jobStartDate ? new Date(raw.jobStartDate as string).toISOString().slice(0, 10) : null,
-    jobEndDate: raw.jobEndDate ? new Date(raw.jobEndDate as string).toISOString().slice(0, 10) : null,
+    jobStartDate: raw.jobStartDate ? new Date(String(raw.jobStartDate)).toISOString().slice(0, 10) : null,
+    jobEndDate: raw.jobEndDate ? new Date(String(raw.jobEndDate)).toISOString().slice(0, 10) : null,
     invoiceIssued: asNullableBoolean(raw.invoiceIssued),
     invoiceNo: asNullableString(raw.invoiceNo),
-   maintenanceProposal:
-  typeof raw.maintenanceProposal === "string"
-    ? raw.maintenanceProposal
-    : raw.maintenanceProposal == null
-    ? null
-    : String(raw.maintenanceProposal),
-    nextFollowUpDate: raw.nextFollowUpDate ? new Date(raw.nextFollowUpDate as string).toISOString().slice(0, 10) : null,
+    maintenanceProposal: asNullableString(raw.maintenanceProposal),
+    nextFollowUpDate: raw.nextFollowUpDate ? new Date(String(raw.nextFollowUpDate)).toISOString().slice(0, 10) : null,
     priority: asNullableString(raw.priority)?.toLowerCase() ?? null,
     statusNote: asNullableString(raw.statusNote),
     siteMediaNotes: asNullableString(raw.siteMediaNotes),
     fileLink: asNullableString(raw.fileLink),
+    buildingPermit: asNullableBoolean(raw.buildingPermit),
+    siteVisitPhotos: asStringArray(raw.siteVisitPhotos),
+    visibilityScope: (["public", "admin_only", "team_lead_only", "assigned_only", "restricted"].includes(String(raw.visibilityScope)) ? String(raw.visibilityScope) : "assigned_only") as Customer["visibilityScope"],
+    visibilityUserIds: asStringArray(raw.visibilityUserIds),
   };
 }
 
-// ============ PAYLOAD BUILDERS ============
-
-function buildCustomerPayload(
-  formData: CustomerFormData,
-  currentUser: LegacyUser
-): Record<string, unknown> {
+function buildCustomerPayload(formData: CustomerFormData, currentUser: LegacyUser): Record<string, unknown> {
   return {
     name: toNullableString(formData.contactName || formData.name) || "",
     company: toNullableString(formData.company || formData.facilityName),
@@ -322,6 +259,8 @@ function buildCustomerPayload(
     notes: formData.notes || "",
     lastContact: toNullableDate(formData.lastContact),
     lastContactNotes: formData.lastContactNotes || "",
+    visibilityScope: formData.visibilityScope || "assigned_only",
+    visibilityUserIds: Array.isArray(formData.visibilityUserIds) ? formData.visibilityUserIds : [],
   };
 }
 
@@ -340,20 +279,19 @@ function buildTechnicalPayload(formData: CustomerTechnicalFormData) {
     hybridInverterPreference: toNullableString(formData.hybridInverterPreference),
     wantsAlternativeProposal: formData.wantsAlternativeProposal ?? null,
     alternativeProposalNotes: toNullableString(formData.alternativeProposalNotes),
+    buildingPermit: formData.buildingPermit ?? null,
+    siteVisitPhotos: Array.isArray(formData.siteVisitPhotos) ? formData.siteVisitPhotos.filter(Boolean) : [],
   };
 }
 
 async function parseJsonResponse(res: Response): Promise<ApiResponse> {
   const text = await res.text();
-
   try {
     return text ? JSON.parse(text) : {};
   } catch {
     return text ? { message: text } : {};
   }
 }
-
-// ============ HOOK ============
 
 export function useCustomers(currentUser: LegacyUser) {
   const [customers, setCustomers] = useState<Customer[]>([]);
@@ -362,25 +300,15 @@ export function useCustomers(currentUser: LegacyUser) {
 
   const loadCustomers = useCallback(async () => {
     try {
-      const res = await fetch("/api/customers", {
-        cache: "no-store",
-        credentials: "include",
-      });
-
+      const res = await fetch("/api/customers", { cache: "no-store", credentials: "include" });
       const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Müşteriler yüklenemedi");
-      }
-
+      if (!res.ok) throw new Error(data?.message || "Müşteriler yüklenemedi");
       const rows: ApiCustomer[] = Array.isArray(data?.customers) ? data.customers : [];
-      const normalizedCustomers = rows.map(normalizeCustomer);
-      setCustomers(normalizedCustomers);
-
+      setCustomers(rows.map(normalizeCustomer));
       const nextActivities: Record<string, Activity[]> = {};
       for (const row of rows) {
         nextActivities[String(row.id)] = Array.isArray(row.activities)
-          ? row.activities.map(normalizeActivity)
+          ? (row.activities as Record<string, unknown>[]).map(normalizeActivity)
           : [];
       }
       setActivitiesByCustomer(nextActivities);
@@ -395,222 +323,87 @@ export function useCustomers(currentUser: LegacyUser) {
 
   useEffect(() => {
     if (!currentUser) {
-      setCustomers([]);
-      setActivitiesByCustomer({});
-      setIsLoaded(true);
-      return;
+      setCustomers([]); setActivitiesByCustomer({}); setIsLoaded(true); return;
     }
-
     void loadCustomers();
   }, [currentUser, loadCustomers]);
 
-  const addCustomer = useCallback(
-    async (formData: CustomerFormData) => {
-      const payload = buildCustomerPayload(formData, currentUser);
+  const addCustomer = useCallback(async (formData: CustomerFormData) => {
+    const res = await fetch("/api/customers", { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(buildCustomerPayload(formData, currentUser)) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Müşteri eklenemedi");
+    await loadCustomers();
+  }, [currentUser, loadCustomers]);
 
-      const res = await fetch("/api/customers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
+  const updateCustomer = useCallback(async (customerId: string, formData: CustomerFormData) => {
+    const res = await fetch(`/api/customers/${customerId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(buildCustomerPayload(formData, currentUser)) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Müşteri güncellenemedi");
+    await loadCustomers();
+  }, [currentUser, loadCustomers]);
 
-      const data = await parseJsonResponse(res);
+  const updateCustomerTechnical = useCallback(async (customerId: string, formData: CustomerTechnicalFormData) => {
+    const res = await fetch(`/api/customers/${customerId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify(buildTechnicalPayload(formData)) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Teknik bilgiler güncellenemedi");
+    await loadCustomers();
+  }, [loadCustomers]);
 
-      if (!res.ok) {
-        throw new Error(data?.message || "Müşteri eklenemedi");
+  const deleteCustomer = useCallback(async (customerId: string) => {
+    const res = await fetch(`/api/customers/${customerId}`, { method: "DELETE", credentials: "include" });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Müşteri silinemedi");
+    await loadCustomers();
+  }, [loadCustomers]);
+
+  const changeStatus = useCallback(async (customerId: string, newStatus: CustomerStatus) => {
+    const res = await fetch(`/api/customers/${customerId}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ status: newStatus }) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Durum güncellenemedi");
+    await loadCustomers();
+  }, [loadCustomers]);
+
+  const addActivity = useCallback(async (customerId: string, type: ActivityType, description: string, dueDate?: string) => {
+    const res = await fetch(`/api/customers/${customerId}/activities`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ type, description, dueDate }) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Aktivite eklenemedi");
+    await loadCustomers();
+  }, [loadCustomers]);
+
+  const addContactNote = useCallback(async (customerId: string, note: string, type: ActivityType = "note") => {
+    const res = await fetch(`/api/customers/${customerId}/notes`, { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ note, type }) });
+    const data = await parseJsonResponse(res);
+    if (!res.ok) throw new Error(data?.message || "Not eklenemedi");
+    await loadCustomers();
+  }, [loadCustomers]);
+
+  const completeActivity = useCallback(async (activityId: string) => {
+    setActivitiesByCustomer((prev) => {
+      const next: Record<string, Activity[]> = {};
+      for (const [customerId, items] of Object.entries(prev)) {
+        next[customerId] = items.map((item) => item.id === activityId ? { ...item, isCompleted: true } : item);
       }
+      return next;
+    });
+  }, []);
 
-      await loadCustomers();
-    },
-    [currentUser, loadCustomers]
-  );
+  const getCustomerActivities = useCallback((customerId: string) => activitiesByCustomer[customerId] || emptyActivities, [activitiesByCustomer]);
 
-  const updateCustomer = useCallback(
-    async (customerId: string, formData: CustomerFormData) => {
-      const payload = buildCustomerPayload(formData, currentUser);
+  const getPendingActivities = useCallback(() => Object.values(activitiesByCustomer).flat().filter((item) => !item.isCompleted && item.dueDate), [activitiesByCustomer]);
 
-      const res = await fetch(`/api/customers/${customerId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Müşteri güncellenemedi");
-      }
-
-      await loadCustomers();
-    },
-    [currentUser, loadCustomers]
-  );
-
-  const updateCustomerTechnical = useCallback(
-    async (customerId: string, formData: CustomerTechnicalFormData) => {
-      const payload = buildTechnicalPayload(formData);
-
-      const res = await fetch(`/api/customers/${customerId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Teknik bilgiler güncellenemedi");
-      }
-
-      await loadCustomers();
-    },
-    [loadCustomers]
-  );
-
-  const deleteCustomer = useCallback(
-    async (customerId: string) => {
-      const res = await fetch(`/api/customers/${customerId}`, {
-        method: "DELETE",
-        credentials: "include",
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Müşteri silinemedi");
-      }
-
-      await loadCustomers();
-    },
-    [loadCustomers]
-  );
-
-  const changeStatus = useCallback(
-    async (customerId: string, newStatus: CustomerStatus) => {
-      const res = await fetch(`/api/customers/${customerId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ status: newStatus }),
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Durum güncellenemedi");
-      }
-
-      await loadCustomers();
-    },
-    [loadCustomers]
-  );
-
-  const addActivity = useCallback(
-    async (customerId: string, type: ActivityType, description: string, dueDate?: string) => {
-      const res = await fetch(`/api/customers/${customerId}/activities`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ type, description, dueDate }),
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Aktivite eklenemedi");
-      }
-
-      await loadCustomers();
-    },
-    [loadCustomers]
-  );
-
-  const addContactNote = useCallback(
-    async (customerId: string, note: string, type: ActivityType = "note") => {
-      const res = await fetch(`/api/customers/${customerId}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ note, type }),
-      });
-
-      const data = await parseJsonResponse(res);
-
-      if (!res.ok) {
-        throw new Error(data?.message || "Not eklenemedi");
-      }
-
-      await loadCustomers();
-    },
-    [loadCustomers]
-  );
-
-  const completeActivity = useCallback(
-    async (activityId: string) => {
-      setActivitiesByCustomer((prev) => {
-        const next: Record<string, Activity[]> = {};
-        for (const [customerId, items] of Object.entries(prev)) {
-          next[customerId] = items.map((item) =>
-            item.id === activityId ? { ...item, isCompleted: true } : item
-          );
-        }
-        return next;
-      });
-    },
-    []
-  );
-
-  const getCustomerActivities = useCallback(
-    (customerId: string) => activitiesByCustomer[customerId] || emptyActivities,
-    [activitiesByCustomer]
-  );
-
-  const getPendingActivities = useCallback(() => {
-    return Object.values(activitiesByCustomer)
-      .flat()
-      .filter((item) => !item.isCompleted && item.dueDate);
-  }, [activitiesByCustomer]);
-
-  const searchCustomers = useCallback(
-    (query: string) => {
-      const q = query.trim().toLowerCase();
-      if (!q) return customers;
-
-      return customers.filter((customer) => {
-        const haystack = [
-          customer.name,
-          customer.contactName,
-          customer.company,
-          customer.facilityName,
-          customer.phone,
-          customer.email,
-          customer.city,
-          customer.district,
-          customer.sector,
-          customer.notes,
-          ...(customer.tags || []),
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-
-        return haystack.includes(q);
-      });
-    },
-    [customers]
-  );
-
-  const getAllTags = useCallback(() => {
-    return Array.from(new Set(customers.flatMap((customer) => customer.tags || []).filter(Boolean)))
-      .sort((a, b) => a.localeCompare(b, "tr"));
+  const searchCustomers = useCallback((query: string) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return customers;
+    return customers.filter((customer) => {
+      const haystack = [customer.name, customer.contactName, customer.company, customer.facilityName, customer.phone, customer.email, customer.city, customer.district, customer.sector, customer.notes, ...(customer.tags || [])].filter(Boolean).join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
   }, [customers]);
+
+  const getAllTags = useCallback(() => Array.from(new Set(customers.flatMap((customer) => customer.tags || []).filter(Boolean))).sort((a, b) => a.localeCompare(b, "tr")), [customers]);
 
   const getStatistics = useCallback(() => {
     const total = customers.length;
-
     const byStatus = {
       new: customers.filter((c) => c.status === "new").length,
       contacted: customers.filter((c) => c.status === "contacted").length,
@@ -620,61 +413,20 @@ export function useCustomers(currentUser: LegacyUser) {
       closed_won: customers.filter((c) => c.status === "closed_won").length,
       closed_lost: customers.filter((c) => c.status === "closed_lost").length,
     };
-
     const byProbability = {
       high: customers.filter((c) => c.probability === "high").length,
       medium: customers.filter((c) => c.probability === "medium").length,
       low: customers.filter((c) => c.probability === "low").length,
       none: customers.filter((c) => c.probability === "none").length,
     };
-
-    const totalEstimatedValue = customers.reduce(
-      (sum, c) => sum + (Number(c.estimatedValue) || 0),
-      0
-    );
-
+    const totalEstimatedValue = customers.reduce((sum, c) => sum + (Number(c.estimatedValue) || 0), 0);
     const weightedForecast = customers.reduce((sum, c) => {
       const value = Number(c.estimatedValue) || 0;
-      const weight =
-        c.probability === "high"
-          ? 0.75
-          : c.probability === "medium"
-          ? 0.5
-          : c.probability === "low"
-          ? 0.25
-          : 0;
-
+      const weight = c.probability === "high" ? 0.75 : c.probability === "medium" ? 0.5 : c.probability === "low" ? 0.25 : 0;
       return sum + value * weight;
     }, 0);
-
-    return {
-      total,
-      byStatus,
-      byProbability,
-      totalEstimatedValue,
-      weightedForecast,
-      monthlyNew: 0,
-      monthlyClosed: 0,
-      conversionRate: 0,
-    };
+    return { total, byStatus, byProbability, totalEstimatedValue, weightedForecast, monthlyNew: 0, monthlyClosed: 0, conversionRate: 0 };
   }, [customers]);
 
-  return {
-    customers,
-    isLoaded,
-    addCustomer,
-    updateCustomer,
-    updateCustomerTechnical,
-    deleteCustomer,
-    addContactNote,
-    addActivity,
-    completeActivity,
-    getCustomerActivities,
-    getPendingActivities,
-    changeStatus,
-    searchCustomers,
-    getStatistics,
-    getAllTags,
-    reloadCustomers: loadCustomers,
-  };
+  return { customers, isLoaded, addCustomer, updateCustomer, updateCustomerTechnical, deleteCustomer, addContactNote, addActivity, completeActivity, getCustomerActivities, getPendingActivities, changeStatus, searchCustomers, getStatistics, getAllTags, reloadCustomers: loadCustomers };
 }

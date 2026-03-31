@@ -61,6 +61,8 @@ const initialFormData: CustomerFormData = {
   lastContactNotes: "",
   assignedTo: "",
   teamLeadId: "",
+  visibilityScope: "assigned_only",
+  visibilityUserIds: [],
 };
 
 export function CustomerForm({
@@ -111,6 +113,8 @@ export function CustomerForm({
         lastContactNotes: customer.lastContactNotes || "",
         assignedTo: customer.assignedTo || "",
         teamLeadId: customer.teamLeadId || "",
+        visibilityScope: customer.visibilityScope || "assigned_only",
+        visibilityUserIds: customer.visibilityUserIds || [],
       });
     } else {
       setFormData({
@@ -176,7 +180,7 @@ export function CustomerForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[calc(100vw-6cm)] max-w-[1300px] h-[90vh] p-0 overflow-hidden rounded-[28px] border-0 bg-slate-100 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[1300px] h-[95vh] p-0 overflow-hidden rounded-[28px] border-0 bg-slate-100 shadow-2xl sm:w-[calc(100vw-3rem)]">
         <DialogTitle className="sr-only">
           {customer ? "Müşteri düzenle" : "Yeni müşteri ekle"}
         </DialogTitle>
@@ -424,6 +428,25 @@ export function CustomerForm({
                                 </SelectItem>
                               ))
                             )}
+                          </SelectContent>
+                        </Select>
+                      </FormField>
+
+                      
+
+                      <FormField label="Görünürlük">
+                        <Select
+                          value={formData.visibilityScope || "assigned_only"}
+                          onValueChange={(v) => handleChange("visibilityScope", v)}
+                        >
+                          <SelectTrigger className="rounded-2xl border-slate-200 bg-slate-50">
+                            <SelectValue placeholder="Görünürlük" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="assigned_only">Atananlar + Yönetici</SelectItem>
+                            <SelectItem value="team_lead_only">Ekip Lideri + Yönetici</SelectItem>
+                            <SelectItem value="admin_only">Yalnız Yönetici</SelectItem>
+                            <SelectItem value="public">Herkese Açık</SelectItem>
                           </SelectContent>
                         </Select>
                       </FormField>

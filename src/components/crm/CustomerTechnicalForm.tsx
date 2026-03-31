@@ -47,6 +47,8 @@ export interface CustomerTechnicalFormData {
   hybridInverterPreference?: string;
   wantsAlternativeProposal?: boolean | null;
   alternativeProposalNotes?: string;
+  buildingPermit?: boolean | null;
+  siteVisitPhotos?: string[];
 }
 
 interface CustomerTechnicalFormProps {
@@ -70,6 +72,8 @@ const initialFormData: CustomerTechnicalFormData = {
   hybridInverterPreference: "",
   wantsAlternativeProposal: null,
   alternativeProposalNotes: "",
+  buildingPermit: null,
+  siteVisitPhotos: ["", "", "", ""],
 };
 
 function toNullableNumber(value: string): number | null {
@@ -143,6 +147,8 @@ export function CustomerTechnicalForm({
         hybridInverterPreference: customer.hybridInverterPreference ?? "",
         wantsAlternativeProposal: customer.wantsAlternativeProposal ?? null,
         alternativeProposalNotes: customer.alternativeProposalNotes ?? "",
+        buildingPermit: customer.buildingPermit ?? null,
+        siteVisitPhotos: [...Array(4)].map((_, index) => customer.siteVisitPhotos?.[index] ?? ""),
       });
     } else {
       setFormData(initialFormData);
@@ -152,12 +158,15 @@ export function CustomerTechnicalForm({
     setIsSubmitting(false);
   }, [customer, isOpen]);
 
-  const handleChange = (
-    field: keyof CustomerTechnicalFormData,
-    value: string | number | boolean | null
-  ) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
+const handleChange = <K extends keyof CustomerTechnicalFormData>(
+  field: K,
+  value: CustomerTechnicalFormData[K]
+) => {
+  setFormData((prev) => ({
+    ...prev,
+    [field]: value,
+  }));
+};
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -210,7 +219,7 @@ export function CustomerTechnicalForm({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[calc(100vw-6cm)] max-w-[1300px] h-[90vh] p-0 overflow-hidden rounded-[28px] border-0 bg-slate-100 shadow-2xl">
+      <DialogContent className="w-[calc(100vw-1rem)] max-w-[1300px] h-[95vh] p-0 overflow-hidden rounded-[28px] border-0 bg-slate-100 shadow-2xl sm:w-[calc(100vw-3rem)]">
         <DialogTitle className="sr-only">Teknik müşteri bilgilerini düzenle</DialogTitle>
 
         <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
@@ -310,6 +319,23 @@ export function CustomerTechnicalForm({
                         placeholder="Örn. 250"
                         className="rounded-2xl border-slate-200 bg-slate-50"
                       />
+                    </FormField>
+
+
+                    <FormField label="Bina Ruhsatı">
+                      <Select
+                        value={booleanToSelectValue(formData.buildingPermit)}
+                        onValueChange={(v) => handleChange("buildingPermit", selectValueToBoolean(v))}
+                      >
+                        <SelectTrigger className="rounded-2xl border-slate-200 bg-slate-50">
+                          <SelectValue placeholder="Seçin" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unknown">Bilinmiyor</SelectItem>
+                          <SelectItem value="true">Var</SelectItem>
+                          <SelectItem value="false">Yok</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormField>
 
                     <FormField label="Sözleşme Gücü (kW)">
@@ -510,6 +536,29 @@ export function CustomerTechnicalForm({
                     </div>
                   </div>
                 </section>
+                <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                  <div className="mb-4 flex items-center gap-2">
+                    <Factory className="h-5 w-5 text-violet-600" />
+                    <h3 className="text-xl font-bold text-slate-900">Saha Fotoğrafları</h3>
+                  </div>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {[0,1,2,3].map((index) => (
+                      <FormField key={index} label={`Fotoğraf ${index + 1} URL`}>
+                        <Input
+                          value={formData.siteVisitPhotos?.[index] ?? ""}
+                          onChange={(e) => {
+                            const next = [...(formData.siteVisitPhotos ?? ["", "", "", ""])];
+                            next[index] = e.target.value;
+                            handleChange("siteVisitPhotos", next);
+                          }}
+                          placeholder="https://..."
+                          className="rounded-2xl border-slate-200 bg-slate-50"
+                        />
+                      </FormField>
+                    ))}
+                  </div>
+                </section>
+
               </div>
 
               <div className="space-y-6">

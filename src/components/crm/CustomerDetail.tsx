@@ -9,11 +9,7 @@ import {
   hybridInverterPreferenceLabels,
   roofSuitabilityLabels,
 } from "@/types";
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -29,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import {
   Building2,
-  CalendarDays,
   ClipboardList,
   FileText,
   Mail,
@@ -51,6 +46,30 @@ import {
   ChevronRight,
   CircleDollarSign,
 } from "lucide-react";
+import { CustomerTimeline } from "@/components/crm/CustomerTimeline";
+
+type CustomerNoteItem = {
+  id: string;
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+  noteDate?: string | null;
+  noteType?: string | null;
+  authorId?: string | null;
+  author?: {
+    id: string;
+    name?: string | null;
+    email?: string | null;
+  } | null;
+};
+
+type TimelineNoteType =
+  | "note"
+  | "call"
+  | "visit"
+  | "meeting"
+  | "offer"
+  | "technical";
 
 interface CustomerDetailProps {
   customer: Customer | null;
@@ -59,7 +78,11 @@ interface CustomerDetailProps {
   onEditGeneral: () => void;
   onEditTechnical: () => void;
   onDelete: () => void;
-  onAddNote: (note: string, type: ActivityType) => Promise<void> | void;
+  onAddNote: (payload: {
+    content: string;
+    noteDate?: string;
+    noteType?: TimelineNoteType;
+  }) => Promise<void> | void;
   onAddActivity: (
     type: ActivityType,
     description: string,
@@ -71,6 +94,10 @@ interface CustomerDetailProps {
     newStatus: CustomerStatus
   ) => Promise<void> | void;
   activities: Activity[];
+  customerNotes?: CustomerNoteItem[];
+  customerNotesLoading?: boolean;
+  customerNotesAdding?: boolean;
+  customerNotesError?: string | null;
   getUserName: (id: string) => string;
   onTabChange?: (tab: "general" | "technical" | "proposal") => void;
   canDelete?: boolean;
@@ -88,6 +115,10 @@ export function CustomerDetail({
   onCompleteActivity,
   onStatusChange,
   activities,
+  customerNotes = [],
+  customerNotesLoading = false,
+  customerNotesAdding = false,
+  customerNotesError = null,
   getUserName,
   onTabChange,
   canDelete = false,
@@ -101,6 +132,7 @@ export function CustomerDetail({
   const [activityDueDate, setActivityDueDate] = useState("");
   const [isNoteSaving, setIsNoteSaving] = useState(false);
   const [isActivitySaving, setIsActivitySaving] = useState(false);
+  const [quickStatusNote, setQuickStatusNote] = useState("");
 
   const sortedActivities = useMemo(
     () =>
@@ -122,13 +154,26 @@ export function CustomerDetail({
   const handleQuickStatusChange = async (value: string) => {
     if (!onStatusChange) return;
     await onStatusChange(customer.id, value as CustomerStatus);
+
+    if (quickStatusNote.trim()) {
+      await onAddNote({
+        content: `${statusLabels[value as CustomerStatus]}: ${quickStatusNote.trim()}`,
+        noteType: "note",
+        noteDate: new Date().toISOString(),
+      });
+      setQuickStatusNote("");
+    }
   };
 
   const handleSaveNote = async () => {
     if (!noteText.trim()) return;
     try {
       setIsNoteSaving(true);
-      await onAddNote(noteText.trim(), "note");
+      await onAddNote({
+        content: noteText.trim(),
+        noteType: "note",
+        noteDate: new Date().toISOString(),
+      });
       setNoteText("");
     } finally {
       setIsNoteSaving(false);
@@ -163,36 +208,36 @@ export function CustomerDetail({
   };
 
   const summaryRows = [
-    { label: "Tahmini Proje", value: formatMoney(customer.estimatedValue) },
-    { label: "Aylık Fatura", value: formatMoney(customer.monthlyBillTl) },
+    { label: "Tahmini Proje", value: formatUsd(customer.estimatedValue) },
+    { label: "Aylık Fatura", value: formatTl(customer.monthlyBillTl) },
     { label: "Batarya Talebi", value: formatBool(customer.batteryRequested) },
     { label: "Kritik Yük", value: formatBool(customer.hasCriticalLoads) },
   ];
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="w-[calc(100vw-6cm)] max-w-[1500px] h-[90vh] overflow-hidden border-0 bg-slate-100 p-0 rounded-[28px]">
+      <DialogContent className="h-[92vh] w-[calc(100vw-12px)] max-w-[1380px] overflow-hidden rounded-[24px] border-0 bg-slate-100 p-0 sm:w-[calc(100vw-36px)]">
         <DialogTitle className="sr-only">
           {customer.name} müşteri detayları
         </DialogTitle>
 
         <div className="flex h-full min-h-0 flex-col">
           <div className="min-h-0 flex-1 overflow-y-auto">
-            <div className="border-b border-slate-200 bg-white px-5 py-4">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-xl font-bold text-white shadow-sm">
+            <div className="border-b border-slate-200 bg-white px-4 py-4 sm:px-5">
+              <div className="flex items-start gap-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-900 text-lg font-bold text-white shadow-sm">
                   {customer.name.charAt(0).toUpperCase()}
                 </div>
 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="text-2xl font-bold tracking-tight text-slate-900">
+                    <h2 className="text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                       {customer.name}
                     </h2>
 
                     <Badge
                       variant="outline"
-                      className={`border px-3 py-1 text-xs font-semibold ${getProbabilityTone(
+                      className={`border px-2.5 py-1 text-[11px] font-semibold ${getProbabilityTone(
                         customer.probability
                       )}`}
                     >
@@ -201,7 +246,7 @@ export function CustomerDetail({
 
                     <Badge
                       variant="outline"
-                      className="border-slate-200 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700"
+                      className="border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700"
                     >
                       {statusLabels[customer.status]}
                     </Badge>
@@ -209,10 +254,10 @@ export function CustomerDetail({
                     {customer.estimatedValue != null && (
                       <Badge
                         variant="outline"
-                        className="border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700"
+                        className="border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold text-violet-700"
                       >
                         <CircleDollarSign className="mr-1 h-3.5 w-3.5" />
-                        {formatMoney(customer.estimatedValue)}
+                        {formatUsd(customer.estimatedValue)}
                       </Badge>
                     )}
                   </div>
@@ -224,7 +269,7 @@ export function CustomerDetail({
                     </p>
                   ) : null}
 
-                  <div className="mt-3 grid gap-3 md:grid-cols-3">
+                  <div className="mt-3 grid gap-2 md:grid-cols-3">
                     <CompactInfoCard
                       icon={<Phone className="h-4 w-4" />}
                       label="Telefon"
@@ -250,7 +295,7 @@ export function CustomerDetail({
                 </div>
               </div>
 
-              <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_1fr_1.2fr]">
+              <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr_1.2fr]">
                 <Button
                   onClick={onEditGeneral}
                   className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
@@ -286,11 +331,18 @@ export function CustomerDetail({
                       <SelectItem value="closed_lost">Kaybedildi</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Textarea
+                    value={quickStatusNote}
+                    onChange={(e) => setQuickStatusNote(e.target.value)}
+                    placeholder="Durum güncellemesine kısa not ekleyin"
+                    rows={2}
+                    className="mt-2 resize-none rounded-xl border-slate-200 bg-white"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="border-b border-slate-200 bg-slate-50 px-5 py-3">
+            <div className="border-b border-slate-200 bg-slate-50 px-4 py-3 sm:px-5">
               <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
                 <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 bg-transparent p-0">
                   <TabsTrigger
@@ -318,8 +370,8 @@ export function CustomerDetail({
 
                 <div className="mt-4">
                   <TabsContent value="general" className="m-0">
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,2.6fr)_360px]">
-                      <div className="space-y-6">
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,2.7fr)_340px]">
+                      <div className="space-y-5">
                         <InfoSection
                           title="Genel Bilgiler"
                           icon={<User className="h-5 w-5 text-blue-600" />}
@@ -342,42 +394,37 @@ export function CustomerDetail({
                             },
                             {
                               label: "Tahmini Proje Tutarı",
-                              value: formatMoney(customer.estimatedValue),
+                              value: formatUsd(customer.estimatedValue),
                               highlight: true,
                             },
                           ]}
                         />
 
-                        <InfoSection
+                        <CustomerTimeline
                           title="Süreç ve Takvim"
-                          icon={<CalendarDays className="h-5 w-5 text-emerald-600" />}
-                          items={[
-                            { label: "Oluşturulma", value: formatDate(customer.createdAt) },
-                            { label: "Son Güncelleme", value: formatDate(customer.updatedAt) },
-                            { label: "Son Temas", value: formatDate(customer.lastContact) },
-                            {
-                              label: "Beklenen Kapanış",
-                              value: formatDate(customer.expectedCloseDate),
-                            },
-                            { label: "Son Temas Notu", value: customer.lastContactNotes },
-                          ]}
+                          notes={customerNotes}
+                          isLoading={customerNotesLoading}
+                          isAdding={customerNotesAdding}
+                          error={customerNotesError}
+                          onAddNote={onAddNote}
+                          getUserName={getUserName}
                         />
 
                         {customer.notes ? (
-                          <div className="rounded-3xl border border-amber-100 bg-amber-50 p-6 shadow-sm">
-                            <h4 className="mb-3 flex items-center gap-2 text-lg font-bold text-amber-900">
+                          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-5 shadow-sm">
+                            <h4 className="mb-3 flex items-center gap-2 text-base font-bold text-amber-900">
                               <Sparkles className="h-4 w-4" />
                               Genel Notlar
                             </h4>
-                            <p className="whitespace-pre-wrap text-sm leading-7 text-amber-900">
+                            <p className="whitespace-pre-wrap text-sm leading-6 text-amber-900">
                               {customer.notes}
                             </p>
                           </div>
                         ) : null}
 
                         {canDelete && (
-                          <section className="rounded-3xl border border-red-200 bg-white p-5 shadow-sm">
-                            <h3 className="text-lg font-bold text-red-600">Yönetici İşlemi</h3>
+                          <section className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+                            <h3 className="text-base font-bold text-red-600">Yönetici İşlemi</h3>
                             <div className="mt-4">
                               <Button
                                 variant="outline"
@@ -392,7 +439,7 @@ export function CustomerDetail({
                         )}
                       </div>
 
-                      <div className="space-y-6">
+                      <div className="space-y-5">
                         <SidebarStack
                           noteText={noteText}
                           setNoteText={setNoteText}
@@ -416,8 +463,8 @@ export function CustomerDetail({
                   </TabsContent>
 
                   <TabsContent value="technical" className="m-0">
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,2.6fr)_360px]">
-                      <div className="space-y-6">
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,2.7fr)_340px]">
+                      <div className="space-y-5">
                         <div className="flex justify-end">
                           <Button onClick={onEditTechnical} className="rounded-2xl">
                             <Wrench className="mr-2 h-4 w-4" />
@@ -462,7 +509,7 @@ export function CustomerDetail({
                             },
                             {
                               label: "Aylık Fatura",
-                              value: formatMoney(customer.monthlyBillTl),
+                              value: formatTl(customer.monthlyBillTl),
                               highlight: true,
                             },
                           ]}
@@ -506,25 +553,9 @@ export function CustomerDetail({
                             },
                           ]}
                         />
-
-                        {canDelete && (
-                          <section className="rounded-3xl border border-red-200 bg-white p-5 shadow-sm">
-                            <h3 className="text-lg font-bold text-red-600">Yönetici İşlemi</h3>
-                            <div className="mt-4">
-                              <Button
-                                variant="outline"
-                                onClick={onDelete}
-                                className="h-11 w-full rounded-2xl border-red-200 bg-red-50 text-red-600 hover:bg-red-100"
-                              >
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Müşteriyi Sil
-                              </Button>
-                            </div>
-                          </section>
-                        )}
                       </div>
 
-                      <div className="space-y-6">
+                      <div className="space-y-5">
                         <SummaryCard
                           title="Teknik Özet"
                           rows={[
@@ -543,11 +574,15 @@ export function CustomerDetail({
                             },
                             {
                               label: "Aylık Fatura",
-                              value: formatMoney(customer.monthlyBillTl),
+                              value: formatTl(customer.monthlyBillTl),
                             },
                             {
                               label: "Batarya",
                               value: formatBool(customer.batteryRequested),
+                            },
+                            {
+                              label: "Bina Ruhsatı",
+                              value: formatBool(customer.buildingPermit),
                             },
                             {
                               label: "Kritik Yük",
@@ -560,8 +595,8 @@ export function CustomerDetail({
                   </TabsContent>
 
                   <TabsContent value="proposal" className="m-0">
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,2.6fr)_360px]">
-                      <div className="space-y-6">
+                    <div className="grid gap-5 xl:grid-cols-[minmax(0,2.7fr)_340px]">
+                      <div className="space-y-5">
                         <InfoSection
                           title="Teklif Detayları"
                           icon={<FileText className="h-5 w-5 text-blue-600" />}
@@ -571,20 +606,20 @@ export function CustomerDetail({
                             { label: "Teklif No", value: customer.proposalNo },
                             {
                               label: "KDV Hariç Tutar",
-                              value: formatMoney(customer.proposalAmountVatExcl),
+                              value: formatUsd(customer.proposalAmountVatExcl),
                             },
                             {
                               label: "KDV Dahil Tutar",
-                              value: formatMoney(customer.proposalAmountVatIncl),
+                              value: formatUsd(customer.proposalAmountVatIncl),
                               highlight: true,
                             },
                             {
                               label: "Tahmini Maliyet",
-                              value: formatMoney(customer.estimatedCost),
+                              value: formatUsd(customer.estimatedCost),
                             },
                             {
                               label: "Tahmini Kâr",
-                              value: formatMoney(customer.estimatedProfit),
+                              value: formatUsd(customer.estimatedProfit),
                               highlight: true,
                             },
                             {
@@ -613,10 +648,37 @@ export function CustomerDetail({
                             },
                           ]}
                         />
+                      </div>
+
+                      <div className="space-y-5">
+                        <SummaryCard
+                          title="Finansal Özet"
+                          rows={[
+                            {
+                              label: "Teklif Tutarı",
+                              value: formatUsd(customer.proposalAmountVatIncl),
+                            },
+                            {
+                              label: "Tahmini Maliyet",
+                              value: formatUsd(customer.estimatedCost),
+                            },
+                            {
+                              label: "Tahmini Kâr",
+                              value: formatUsd(customer.estimatedProfit),
+                            },
+                            {
+                              label: "Kâr Oranı",
+                              value:
+                                customer.estimatedProfitRate != null
+                                  ? `%${customer.estimatedProfitRate}`
+                                  : "-",
+                            },
+                          ]}
+                        />
 
                         {canDelete && (
-                          <section className="rounded-3xl border border-red-200 bg-white p-5 shadow-sm">
-                            <h3 className="text-lg font-bold text-red-600">Yönetici İşlemi</h3>
+                          <section className="rounded-2xl border border-red-200 bg-white p-5 shadow-sm">
+                            <h3 className="text-base font-bold text-red-600">Yönetici İşlemi</h3>
                             <div className="mt-4">
                               <Button
                                 variant="outline"
@@ -629,33 +691,6 @@ export function CustomerDetail({
                             </div>
                           </section>
                         )}
-                      </div>
-
-                      <div className="space-y-6">
-                        <SummaryCard
-                          title="Finansal Özet"
-                          rows={[
-                            {
-                              label: "Teklif Tutarı",
-                              value: formatMoney(customer.proposalAmountVatIncl),
-                            },
-                            {
-                              label: "Tahmini Maliyet",
-                              value: formatMoney(customer.estimatedCost),
-                            },
-                            {
-                              label: "Tahmini Kâr",
-                              value: formatMoney(customer.estimatedProfit),
-                            },
-                            {
-                              label: "Kâr Oranı",
-                              value:
-                                customer.estimatedProfitRate != null
-                                  ? `%${customer.estimatedProfitRate}`
-                                  : "-",
-                            },
-                          ]}
-                        />
                       </div>
                     </div>
                   </TabsContent>
@@ -681,12 +716,12 @@ function CompactInfoCard({
   href?: string;
 }) {
   const content = (
-    <div className="rounded-2xl bg-slate-50 px-4 py-3 text-sm">
+    <div className="rounded-2xl bg-slate-50 px-3 py-3 text-sm">
       <div className="mb-1 flex items-center gap-2 text-slate-500">
         {icon}
-        <span className="text-xs">{label}</span>
+        <span className="text-[11px]">{label}</span>
       </div>
-      <div className="font-semibold text-slate-900 break-all">{value}</div>
+      <div className="break-all font-semibold text-slate-900">{value}</div>
     </div>
   );
 
@@ -711,23 +746,23 @@ function InfoSection({
   items: { label: string; value: any; highlight?: boolean }[];
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="mb-4 flex items-center gap-2">
         {icon}
-        <h3 className="text-xl font-bold text-slate-900">{title}</h3>
+        <h3 className="text-lg font-bold text-slate-900">{title}</h3>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid gap-3 md:grid-cols-2">
         {items.map((item, index) => (
           <div
             key={index}
-            className={`rounded-2xl border p-4 ${
+            className={`rounded-2xl border p-3 ${
               item.highlight
                 ? "border-blue-100 bg-blue-50"
                 : "border-slate-100 bg-slate-50"
             }`}
           >
-            <p className="text-[11px] uppercase tracking-[0.15em] text-slate-500">
+            <p className="text-[10px] uppercase tracking-[0.15em] text-slate-500">
               {item.label}
             </p>
             <p
@@ -752,10 +787,10 @@ function SummaryCard({
   rows: { label: string; value: string }[];
 }) {
   return (
-    <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-      <h3 className="text-lg font-bold text-slate-900">{title}</h3>
+    <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <h3 className="text-base font-bold text-slate-900">{title}</h3>
 
-      <div className="mt-4 space-y-3">
+      <div className="mt-4 space-y-2.5">
         {rows.map((row, index) => (
           <div
             key={index}
@@ -791,9 +826,9 @@ function SidebarStack(props: {
   summaryRows: { label: string; value: string }[];
 }) {
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h4 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+    <div className="space-y-5">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-bold text-slate-900">
           <MessageSquare className="h-4 w-4 text-blue-600" />
           Hızlı Not
         </h4>
@@ -809,7 +844,7 @@ function SidebarStack(props: {
           <Button
             onClick={props.onSaveNote}
             disabled={props.isNoteSaving || !props.noteText.trim()}
-            className="h-11 w-full rounded-2xl bg-slate-900 hover:bg-slate-800"
+            className="h-10 w-full rounded-2xl bg-slate-900 hover:bg-slate-800"
           >
             <Save className="mr-2 h-4 w-4" />
             {props.isNoteSaving ? "Kaydediliyor..." : "Not Kaydet"}
@@ -817,8 +852,8 @@ function SidebarStack(props: {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h4 className="flex items-center gap-2 text-lg font-bold text-slate-900">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h4 className="flex items-center gap-2 text-base font-bold text-slate-900">
           <ClipboardList className="h-4 w-4 text-emerald-600" />
           Aktivite Planla
         </h4>
@@ -856,7 +891,7 @@ function SidebarStack(props: {
           <div className="space-y-2">
             <Label>Termin Tarihi</Label>
             <Input
-              type="date"
+              type="datetime-local"
               value={props.activityDueDate}
               onChange={(e) => props.setActivityDueDate(e.target.value)}
               className="rounded-2xl border-slate-200 bg-slate-50"
@@ -866,16 +901,16 @@ function SidebarStack(props: {
           <Button
             onClick={props.onSaveActivity}
             disabled={props.isActivitySaving || !props.activityText.trim()}
-            className="h-11 w-full rounded-2xl"
+            className="h-10 w-full rounded-2xl"
           >
             {props.isActivitySaving ? "Kaydediliyor..." : "Aktivite Kaydet"}
           </Button>
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h4 className="text-lg font-bold text-slate-900">Özet Kartı</h4>
-        <div className="mt-4 space-y-3">
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h4 className="text-base font-bold text-slate-900">Özet Kartı</h4>
+        <div className="mt-4 space-y-2.5">
           {props.summaryRows.map((row, index) => (
             <div
               key={index}
@@ -890,8 +925,8 @@ function SidebarStack(props: {
         </div>
       </section>
 
-      <section className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h4 className="text-lg font-bold text-slate-900">Planlı Aktiviteler</h4>
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h4 className="text-base font-bold text-slate-900">Planlı Aktiviteler</h4>
 
         <div className="mt-4 space-y-3">
           {props.activities.length === 0 ? (
@@ -967,11 +1002,20 @@ function formatDate(value?: string | null) {
   }).format(date);
 }
 
-function formatMoney(value?: number | null) {
+function formatUsd(value?: number | null) {
   if (value == null) return "-";
-  return new Intl.NumberFormat("en-US", {
+  return new Intl.NumberFormat("tr-TR", {
     style: "currency",
     currency: "USD",
+    maximumFractionDigits: 0,
+  }).format(Number(value));
+}
+
+function formatTl(value?: number | null) {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("tr-TR", {
+    style: "currency",
+    currency: "TRY",
     maximumFractionDigits: 0,
   }).format(Number(value));
 }
