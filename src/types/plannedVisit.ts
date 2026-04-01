@@ -23,6 +23,7 @@ export interface PlannedVisit {
   sector?: string | null;
   locationNote?: string | null;
   remoteNotes?: string | null;
+  locationLink?: string | null;
 
   assignedToId?: string | null;
   teamLeadId?: string | null;
@@ -79,6 +80,7 @@ export interface PlannedVisitFormData {
   address?: string;
   sector?: string;
   locationNote?: string;
+  locationLink?: string;
   remoteNotes?: string;
 
   assignedToId?: string;

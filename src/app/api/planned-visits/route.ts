@@ -189,6 +189,11 @@ export async function POST(req: NextRequest) {
         ? body.remoteNotes.trim()
         : null;
 
+        const locationLink =
+  typeof body.locationLink === "string" && body.locationLink.trim()
+    ? body.locationLink.trim()
+    : null;
+
     const assignedToId =
       typeof body.assignedToId === "string" && body.assignedToId.trim()
         ? body.assignedToId.trim()
@@ -248,6 +253,7 @@ export async function POST(req: NextRequest) {
         address,
         sector,
         locationNote,
+        locationLink,
         remoteNotes,
         assignedToId,
         teamLeadId,

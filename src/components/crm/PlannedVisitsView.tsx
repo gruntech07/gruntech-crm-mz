@@ -102,6 +102,21 @@ function formatTime(value?: string | null) {
   }).format(date);
 }
 
+function getMapHref(visit: PlannedVisit) {
+  if (visit.locationLink?.trim()) return visit.locationLink.trim();
+
+  const fallbackQuery = [visit.address, visit.district, visit.city]
+    .filter(Boolean)
+    .join(", ")
+    .trim();
+
+  if (!fallbackQuery) return null;
+
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    fallbackQuery
+  )}`;
+}
+
 function SummaryCard({
   title,
   value,
@@ -153,6 +168,7 @@ export function PlannedVisitsView({
         visit.locationNote,
         visit.remoteNotes,
         visit.assignedTo?.name,
+        visit.locationLink,
       ]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(q));
@@ -298,6 +314,7 @@ export function PlannedVisitsView({
               {filteredVisits.map((visit) => {
                 const statusInfo = statusMap[visit.status];
                 const isBusy = busyId === visit.id;
+                const mapHref = getMapHref(visit);
                 const canConvert =
                   visit.status !== "CONVERTED" && !visit.customerId;
 
@@ -364,14 +381,24 @@ export function PlannedVisitsView({
                             <MapPin className="h-4 w-4" />
                             Konum
                           </div>
-                          <div className="space-y-1 text-sm text-slate-600">
-                            <p>
-                              {[visit.city, visit.district]
-                                .filter(Boolean)
-                                .join(" / ") || "-"}
-                            </p>
-                            <p>{visit.address || visit.locationNote || "-"}</p>
-                          </div>
+                         <div className="space-y-2 text-sm text-slate-600">
+  <p>
+    {[visit.city, visit.district].filter(Boolean).join(" / ") || "-"}
+  </p>
+  <p>{visit.address || visit.locationNote || "-"}</p>
+
+  {mapHref ? (
+    <a
+      href={mapHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-xs font-medium text-white transition hover:bg-emerald-700"
+    >
+      <MapPin className="h-4 w-4" />
+      Haritada Aç
+    </a>
+  ) : null}
+</div>
                         </div>
 
                         <div className="rounded-2xl bg-slate-50 p-4">

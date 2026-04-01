@@ -40,6 +40,7 @@ const emptyForm: PlannedVisitFormData = {
   address: "",
   sector: "",
   locationNote: "",
+  locationLink: "",
   remoteNotes: "",
   assignedToId: "",
   teamLeadId: "",
@@ -77,6 +78,7 @@ function buildInitialForm(
       address: visit.address || "",
       sector: visit.sector || "",
       locationNote: visit.locationNote || "",
+      locationLink: visit.locationLink || "",
       remoteNotes: visit.remoteNotes || "",
       assignedToId: visit.assignedToId || "",
       teamLeadId: visit.teamLeadId || "",
@@ -152,6 +154,7 @@ export function PlannedVisitForm({
         address: form.address?.trim() || "",
         sector: form.sector?.trim() || "",
         locationNote: form.locationNote?.trim() || "",
+        locationLink: form.locationLink?.trim() || "",
         remoteNotes: form.remoteNotes?.trim() || "",
         assignedToId: form.assignedToId || "",
         teamLeadId: form.teamLeadId || "",
@@ -271,7 +274,17 @@ export function PlannedVisitForm({
           className="rounded-xl"
         />
       </div>
-
+        <div className="space-y-2">
+  <Label htmlFor="locationLink">Konum Linki</Label>
+  <Input
+    id="locationLink"
+    type="url"
+    value={form.locationLink || ""}
+    onChange={(e) => handleChange("locationLink", e.target.value)}
+    placeholder="https://maps.google.com/... veya maps.app.goo.gl/..."
+    className="rounded-xl"
+  />
+</div>
       <div className="grid gap-5 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="locationNote">Konum Notu</Label>

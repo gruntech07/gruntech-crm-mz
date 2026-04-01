@@ -220,6 +220,12 @@ export async function PATCH(
           : null;
     }
 
+    if (typeof body.locationLink === "string" || body.locationLink === null) {
+  data.locationLink =
+    typeof body.locationLink === "string" && body.locationLink.trim()
+      ? body.locationLink.trim()
+      : null;
+}
     if (typeof body.remoteNotes === "string" || body.remoteNotes === null) {
       data.remoteNotes =
         typeof body.remoteNotes === "string"

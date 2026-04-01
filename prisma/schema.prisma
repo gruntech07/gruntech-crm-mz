@@ -189,6 +189,7 @@ model PlannedVisit {
   address           String?
   sector            String?
   locationNote      String?
+  locationLink      String?
   remoteNotes       String?
   assignedToId      String?
   teamLeadId        String?
