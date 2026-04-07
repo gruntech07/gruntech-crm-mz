@@ -199,7 +199,6 @@ export async function GET(_req: NextRequest, context: RouteContext) {
         proposalAmountVatIncl: true,
         estimatedCost: true,
         estimatedProfit: true,
-        estimatedProfitRate: true,
         stage: true,
         lastMeetingDate: true,
         result: true,
