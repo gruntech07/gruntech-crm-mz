@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useCallback, useState } from "react";
+import { useEffect, useMemo, useCallback, useState, useRef } from "react";
 import { useCustomers } from "@/hooks/useCustomers";
 import { useUsers } from "@/hooks/useUsers";
 import { usePlannedVisits } from "@/hooks/usePlannedVisits";
@@ -105,6 +105,7 @@ function mapSessionUserToLegacy(user: SessionUser): LegacyUser {
 export function CRMMain() {
   const [sessionUser, setSessionUser] = useState<SessionUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("list");
 
   const legacyUser = sessionUser ? mapSessionUserToLegacy(sessionUser) : null;
 
@@ -142,7 +143,11 @@ export function CRMMain() {
     updatePlannedVisit,
     deletePlannedVisit,
     convertPlannedVisitToCustomer,
-  } = usePlannedVisits();
+  } = usePlannedVisits({
+    autoLoad: false,
+  });
+
+  const visitsLoadedRef = useRef(false);
 
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<CustomerStatus | "all">("all");
@@ -164,7 +169,6 @@ export function CRMMain() {
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [customerToEdit, setCustomerToEdit] = useState<Customer | null>(null);
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
-  const [activeTab, setActiveTab] = useState("list");
 
   useEffect(() => {
     const loadSessionUser = async () => {
@@ -189,6 +193,14 @@ export function CRMMain() {
 
     void loadSessionUser();
   }, []);
+
+  useEffect(() => {
+    if (activeTab !== "visits") return;
+    if (visitsLoadedRef.current) return;
+
+    visitsLoadedRef.current = true;
+    void loadPlannedVisits();
+  }, [activeTab, loadPlannedVisits]);
 
   const auth = useMemo(() => {
     const user: AppUser | null = legacyUser
@@ -297,7 +309,7 @@ export function CRMMain() {
     addNote: addCustomerTimelineNote,
   } = useCustomerNotes({
     customerId: selectedCustomer?.id ?? null,
-    enabled: !!selectedCustomer,
+    enabled: isDetailOpen && !!selectedCustomer,
   });
 
   const handleFormSubmit = (data: CustomerFormData) => {
@@ -408,6 +420,7 @@ export function CRMMain() {
 
       setIsPlannedVisitFormOpen(false);
       await loadPlannedVisits();
+      visitsLoadedRef.current = true;
     } finally {
       setIsPlannedVisitSubmitting(false);
     }
@@ -430,6 +443,7 @@ export function CRMMain() {
     });
 
     await loadPlannedVisits();
+    visitsLoadedRef.current = true;
     setActiveTab("list");
   };
 
@@ -739,8 +753,9 @@ export function CRMMain() {
               onCreate={handleOpenPlannedVisitCreate}
               onEdit={handleOpenPlannedVisitEdit}
               onRefresh={async () => {
-  await loadPlannedVisits();
-}}
+                await loadPlannedVisits();
+                visitsLoadedRef.current = true;
+              }}
               onDelete={async (visit) => {
                 await deletePlannedVisit(visit.id);
               }}

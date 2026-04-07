@@ -32,27 +32,43 @@ interface DashboardProps {
   upcomingActivities: Activity[];
 }
 
-export function Dashboard({
+export const Dashboard = React.memo(function Dashboard({
   stats,
   recentCustomers,
   upcomingActivities,
 }: DashboardProps) {
-  const byStatus = {
-    new: stats.byStatus?.new ?? 0,
-    contacted: stats.byStatus?.contacted ?? 0,
-    qualified: stats.byStatus?.qualified ?? 0,
-    proposal: stats.byStatus?.proposal ?? 0,
-    negotiation: stats.byStatus?.negotiation ?? 0,
-    closed_won: stats.byStatus?.closed_won ?? 0,
-    closed_lost: stats.byStatus?.closed_lost ?? 0,
-  };
+  const byStatus = React.useMemo(
+    () => ({
+      new: stats.byStatus?.new ?? 0,
+      contacted: stats.byStatus?.contacted ?? 0,
+      qualified: stats.byStatus?.qualified ?? 0,
+      proposal: stats.byStatus?.proposal ?? 0,
+      negotiation: stats.byStatus?.negotiation ?? 0,
+      closed_won: stats.byStatus?.closed_won ?? 0,
+      closed_lost: stats.byStatus?.closed_lost ?? 0,
+    }),
+    [stats.byStatus]
+  );
 
-  const byProbability = {
-    high: stats.byProbability?.high ?? 0,
-    medium: stats.byProbability?.medium ?? 0,
-    low: stats.byProbability?.low ?? 0,
-    none: stats.byProbability?.none ?? 0,
-  };
+  const byProbability = React.useMemo(
+    () => ({
+      high: stats.byProbability?.high ?? 0,
+      medium: stats.byProbability?.medium ?? 0,
+      low: stats.byProbability?.low ?? 0,
+      none: stats.byProbability?.none ?? 0,
+    }),
+    [stats.byProbability]
+  );
+
+  const limitedActivities = React.useMemo(
+    () => upcomingActivities.slice(0, 10),
+    [upcomingActivities]
+  );
+
+  const limitedCustomers = React.useMemo(
+    () => recentCustomers.slice(0, 10),
+    [recentCustomers]
+  );
 
   return (
     <div className="space-y-4">
@@ -91,48 +107,13 @@ export function Dashboard({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <PipelineBar
-            label={statusLabels.new}
-            count={byStatus.new}
-            total={stats.total ?? 0}
-            tone="bg-slate-500"
-          />
-          <PipelineBar
-            label={statusLabels.contacted}
-            count={byStatus.contacted}
-            total={stats.total ?? 0}
-            tone="bg-sky-500"
-          />
-          <PipelineBar
-            label={statusLabels.qualified}
-            count={byStatus.qualified}
-            total={stats.total ?? 0}
-            tone="bg-indigo-500"
-          />
-          <PipelineBar
-            label={statusLabels.proposal}
-            count={byStatus.proposal}
-            total={stats.total ?? 0}
-            tone="bg-violet-500"
-          />
-          <PipelineBar
-            label={statusLabels.negotiation}
-            count={byStatus.negotiation}
-            total={stats.total ?? 0}
-            tone="bg-amber-500"
-          />
-          <PipelineBar
-            label={statusLabels.closed_won}
-            count={byStatus.closed_won}
-            total={stats.total ?? 0}
-            tone="bg-emerald-500"
-          />
-          <PipelineBar
-            label={statusLabels.closed_lost}
-            count={byStatus.closed_lost}
-            total={stats.total ?? 0}
-            tone="bg-rose-500"
-          />
+          <PipelineBar label={statusLabels.new} count={byStatus.new} total={stats.total ?? 0} tone="bg-slate-500" />
+          <PipelineBar label={statusLabels.contacted} count={byStatus.contacted} total={stats.total ?? 0} tone="bg-sky-500" />
+          <PipelineBar label={statusLabels.qualified} count={byStatus.qualified} total={stats.total ?? 0} tone="bg-indigo-500" />
+          <PipelineBar label={statusLabels.proposal} count={byStatus.proposal} total={stats.total ?? 0} tone="bg-violet-500" />
+          <PipelineBar label={statusLabels.negotiation} count={byStatus.negotiation} total={stats.total ?? 0} tone="bg-amber-500" />
+          <PipelineBar label={statusLabels.closed_won} count={byStatus.closed_won} total={stats.total ?? 0} tone="bg-emerald-500" />
+          <PipelineBar label={statusLabels.closed_lost} count={byStatus.closed_lost} total={stats.total ?? 0} tone="bg-rose-500" />
         </CardContent>
       </Card>
 
@@ -146,13 +127,13 @@ export function Dashboard({
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-72">
-              {upcomingActivities.length === 0 ? (
+              {limitedActivities.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-400">
                   Yaklaşan görev bulunmuyor
                 </p>
               ) : (
                 <div className="space-y-2.5">
-                  {upcomingActivities.slice(0, 10).map((activity) => (
+                  {limitedActivities.map((activity) => (
                     <div
                       key={activity.id}
                       className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
@@ -200,13 +181,13 @@ export function Dashboard({
           </CardHeader>
           <CardContent>
             <ScrollArea className="h-72">
-              {recentCustomers.length === 0 ? (
+              {limitedCustomers.length === 0 ? (
                 <p className="py-8 text-center text-sm text-slate-400">
                   Henüz müşteri eklenmemiş
                 </p>
               ) : (
                 <div className="space-y-2.5">
-                  {recentCustomers.slice(0, 10).map((customer) => (
+                  {limitedCustomers.map((customer) => (
                     <div
                       key={customer.id}
                       className="rounded-2xl border border-slate-200 bg-slate-50 p-3"
@@ -254,32 +235,16 @@ export function Dashboard({
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-            <MiniStatBox
-              value={stats.monthlyNew ?? 0}
-              label="Yeni Müşteri"
-              tone="blue"
-            />
-            <MiniStatBox
-              value={stats.monthlyClosed ?? 0}
-              label="Kapanan Satış"
-              tone="green"
-            />
-            <MiniStatBox
-              value={byProbability.high}
-              label="Yüksek İhtimal"
-              tone="violet"
-            />
-            <MiniStatBox
-              value={byProbability.medium + byProbability.low}
-              label="Potansiyel"
-              tone="amber"
-            />
+            <MiniStatBox value={stats.monthlyNew ?? 0} label="Yeni Müşteri" tone="blue" />
+            <MiniStatBox value={stats.monthlyClosed ?? 0} label="Kapanan Satış" tone="green" />
+            <MiniStatBox value={byProbability.high} label="Yüksek İhtimal" tone="violet" />
+            <MiniStatBox value={byProbability.medium + byProbability.low} label="Potansiyel" tone="amber" />
           </div>
         </CardContent>
       </Card>
     </div>
   );
-}
+});
 
 interface MetricCardProps {
   title: string;
@@ -288,7 +253,12 @@ interface MetricCardProps {
   tone: "blue" | "green" | "violet" | "amber";
 }
 
-function MetricCard({ title, value, icon: Icon, tone }: MetricCardProps) {
+const MetricCard = React.memo(function MetricCard({
+  title,
+  value,
+  icon: Icon,
+  tone,
+}: MetricCardProps) {
   const toneMap = {
     blue: "bg-blue-100 text-blue-600",
     green: "bg-emerald-100 text-emerald-600",
@@ -316,7 +286,7 @@ function MetricCard({ title, value, icon: Icon, tone }: MetricCardProps) {
       </CardContent>
     </Card>
   );
-}
+});
 
 interface PipelineBarProps {
   label: string;
@@ -325,7 +295,12 @@ interface PipelineBarProps {
   tone: string;
 }
 
-function PipelineBar({ label, count, total, tone }: PipelineBarProps) {
+const PipelineBar = React.memo(function PipelineBar({
+  label,
+  count,
+  total,
+  tone,
+}: PipelineBarProps) {
   const percentage = total > 0 ? (count / total) * 100 : 0;
 
   return (
@@ -343,7 +318,7 @@ function PipelineBar({ label, count, total, tone }: PipelineBarProps) {
       </div>
     </div>
   );
-}
+});
 
 function MiniStatBox({
   value,
@@ -381,7 +356,9 @@ function formatCurrency(value: number): string {
 
 function formatDateTime(date?: string) {
   if (!date) return "-";
+
   const d = new Date(date);
+
   return Number.isNaN(d.getTime())
     ? date
     : d.toLocaleString("tr-TR", {
