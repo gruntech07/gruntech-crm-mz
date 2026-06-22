@@ -24,12 +24,6 @@ export function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  const demoAccounts = [
-    { role: "Yönetici", email: "admin@crm.com", pass: "admin123" },
-    { role: "Ekip Lideri", email: "lead@crm.com", pass: "lead123" },
-    { role: "Satış Temsilcisi", email: "rep@crm.com", pass: "rep123" },
-  ];
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
@@ -61,11 +55,6 @@ export function LoginPage() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const fillDemo = (email: string, password: string) => {
-    setFormData({ email, password });
-    setError("");
   };
 
   return (
@@ -158,27 +147,6 @@ export function LoginPage() {
               </Button>
             </form>
 
-            <div className="space-y-3">
-              <div className="text-sm font-medium text-slate-700 text-center">
-                Demo Hesaplar
-              </div>
-              <div className="grid gap-2">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.email}
-                    type="button"
-                    onClick={() => fillDemo(account.email, account.pass)}
-                    className="text-left p-3 rounded-lg border border-slate-200 hover:border-blue-300 hover:bg-blue-50 transition-colors"
-                  >
-                    <div className="font-medium text-sm text-slate-900">
-                      {account.role}
-                    </div>
-                    <div className="text-xs text-slate-600">{account.email}</div>
-                    <div className="text-xs text-slate-500">{account.pass}</div>
-                  </button>
-                ))}
-              </div>
-            </div>
           </CardContent>
         </Card>
       </div>
